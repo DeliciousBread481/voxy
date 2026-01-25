@@ -59,10 +59,23 @@ uint packVec4(vec4 vec) {
     return vec_.x|vec_.y|vec_.z|vec_.w;
 }
 
+float faceShadeFactor(uint face, bool isShaded) {
+    uint axis = face>>1u;
+    float axisIs1 = float(int(axis==1u));
+    float axisIs2 = float(int(axis==2u));
+    float axisIs0 = 1.0f - axisIs1 - axisIs2;
 
-#ifndef PATCHED_SHADER
-float computeDirectionalFaceTint(bool isShaded, uint face);
-#endif
+    #ifdef DARKENED_TINTING
+    float shaded = axisIs1*0.8f + axisIs2*0.6f + axisIs0*0.9f;
+    float unshaded = 0.9f;
+    return mix(unshaded, shaded, float(int(isShaded)));
+    #else
+    float shaded = axisIs1*0.8f + axisIs2*0.6f + axisIs0*1.0f;
+    float downFactor = mix(1.0f, 0.5f, float(int(face==0u)));
+    float shade = shaded * downFactor;
+    return mix(1.0f, shade, float(int(isShaded)));
+    #endif
+}
 
 uvec3 makeRemainingAttributes(const in BlockModel model, const in Quad quad, uint lodLevel, uint face) {
     uvec3 attributes = uvec3(0);
@@ -104,8 +117,7 @@ uvec3 makeRemainingAttributes(const in BlockModel model, const in Quad quad, uin
         addin = encodedData;
     }
 
-    tinting.rgb *= computeDirectionalFaceTint(isShaded, face);
-
+    tinting.xyz *= faceShadeFactor(face, isShaded);
     attributes.x = packVec4(tinting);
     attributes.y = conditionalTinting;
     attributes.z = addin|(face<<8);

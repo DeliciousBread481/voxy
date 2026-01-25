@@ -405,6 +405,9 @@ public class IrisVoxyRenderPipelineData {
             }
         };
         CommonUniforms.addDynamicUniforms(uniformBuilder, FogMode.PER_FRAGMENT);
+        if (Arrays.asList(patch.getUniformList()).contains("isPaleGarden") && !seenUniforms.contains("isPaleGarden")) {
+            uniformBuilder.uniform1i("isPaleGarden", () -> 0, null);
+        }
         cu.assignTo(uniformBuilder);
         cu.mapholderToPass(uniformBuilder, patch);
 
