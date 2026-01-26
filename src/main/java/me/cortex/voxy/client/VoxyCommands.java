@@ -18,9 +18,12 @@ import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.client.Minecraft;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.storage.LevelResource;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -148,6 +151,21 @@ public class VoxyCommands {
         });
     }
 
+    private static boolean fileBasedImporter(Level level, File directory) {
+        var instance = (VoxyClientInstance)VoxyCommon.getInstance();
+        if (instance == null) {
+            return false;
+        }
+
+        var engine = WorldIdentifier.ofEngine(level);
+        if (engine==null) return false;
+        return instance.getImportManager().makeAndRunIfNone(engine, ()->{
+            var importer = new WorldImporter(engine, level, instance.getServiceManager(), instance.savingServiceRateLimiter);
+            importer.importRegionDirectoryAsync(directory);
+            return importer;
+        });
+    }
+
     private static int importRaw(CommandContext<FabricClientCommandSource> ctx) {
         if (VoxyCommon.getInstance() == null) {
             ctx.getSource().sendError(Component.translatable("Voxy must be enabled in settings to use this"));
@@ -249,30 +267,51 @@ public class VoxyCommands {
             name = name.substring(0, name.length()-1);
         }
         if (file.resolve("level.dat").toFile().exists()) {
-            var dimFile = DimensionType.getStorageFolder(Minecraft.getInstance().level.dimension(), file)
+            var server = Minecraft.getInstance().getSingleplayerServer();
+            if (server != null) {
+                return importAllDimensionsFromServer(server, file) ? 0 : 1;
+            }
+
+            var level = Minecraft.getInstance().level;
+            if (level == null) {
+                return 1;
+            }
+            var dimFile = DimensionType.getStorageFolder(level.dimension(), file)
                     .resolve("region")
                     .toFile();
-            if (!dimFile.isDirectory()) return 1;
-            return fileBasedImporter(dimFile)?0:1;
-            //We are in a world directory, so import the current dimension we are in
-            /*
-            for (var dim : new String[]{"overworld", "the_nether", "the_end"}) {//This is so annoying that you cant loop through all the dimensions
-                var id = ResourceKey.create(Registries.DIMENSION, Identifier.withDefaultNamespace(dim));
-                var dimPath = DimensionType.getStorageFolder(id, file);
-                dimPath = dimPath.resolve("region");
-                var dimFile = dimPath.toFile();
-                if (dimFile.isDirectory()) {//exists and is a directory
-                    if (!fileBasedImporter(dimFile)) {
-                        Logger.error("Failed to import dimension: " + id);
-                    }
-                }
-            }*/
+            if (!dimFile.isDirectory()) {
+                return 1;
+            }
+            return fileBasedImporter(dimFile) ? 0 : 1;
         } else {
             if (!(name.endsWith("region"))) {
                 file = file.resolve("region");
             }
             return fileBasedImporter(file.toFile()) ? 0 : 1;
         }
+    }
+
+    private static boolean importAllDimensionsFromServer(MinecraftServer server, Path worldRoot) {
+        boolean startedAny = false;
+        boolean failedAny = false;
+
+        for (ResourceKey<Level> levelKey : server.levelKeys()) {
+            ServerLevel level = server.getLevel(levelKey);
+            if (level == null) {
+                continue;
+            }
+            var dimPath = DimensionType.getStorageFolder(levelKey, worldRoot)
+                    .resolve("region")
+                    .toFile();
+            if (!dimPath.isDirectory()) {
+                continue;
+            }
+            boolean started = fileBasedImporter(level, dimPath);
+            startedAny |= started;
+            failedAny |= !started;
+        }
+
+        return startedAny && !failedAny;
     }
 
     private static int importZip(CommandContext<FabricClientCommandSource> ctx) {
