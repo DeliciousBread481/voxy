@@ -2,6 +2,7 @@ package me.cortex.voxy.client.core.util;
 
 import me.cortex.voxy.client.core.VoxyRenderSystem;
 import me.cortex.voxy.client.core.rendering.Viewport;
+import me.cortex.voxy.client.iris.IGetIrisVoxyPipelineData;
 import me.jellysquid.mods.sodium.client.render.chunk.ChunkRenderMatrices;
 import net.fabricmc.loader.api.FabricLoader;
 import net.irisshaders.iris.Iris;
@@ -47,6 +48,22 @@ public class IrisUtil {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public static void voxypipelinepatch() {
+        if (!IRIS_INSTALLED) {
+            return;
+        }
+        if (!irisShaderPackEnabled0()) {
+            return;
+        }
+        var pipeline = Iris.getPipelineManager().getPipelineNullable();
+        if (pipeline instanceof IGetIrisVoxyPipelineData getData) {
+            if (getData.voxy$getPipelineData() != null) {
+                return;
+            }
+        }
+        reload0();
     }
 
     private static void clearIrisSamplers0() {
