@@ -32,6 +32,9 @@ public class VoxyConfig implements OptionStorage<VoxyConfig> {
     public float subDivisionSize = 64;
     public boolean renderVanillaFog = true;
     public boolean dontUseSodiumBuilderThreads = false;
+    public int maxVramUsageMB = 2048;
+    public int targetFPS = 60;
+    public boolean atmosphericFog = false;
 
     private static VoxyConfig loadOrCreate() {
         var path = getConfigPath();

@@ -16,6 +16,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
 import org.joml.Matrix4f;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.system.MemoryUtil;
 
 import java.util.function.BooleanSupplier;
 
@@ -30,6 +31,8 @@ import static org.lwjgl.opengl.GL11C.GL_NEAREST;
 import static org.lwjgl.opengl.GL11C.GL_RGBA8;
 import static org.lwjgl.opengl.GL14.glBlendFuncSeparate;
 import static org.lwjgl.opengl.GL15.GL_READ_WRITE;
+import static org.lwjgl.opengl.GL20C.nglUniform3fv;
+import static org.lwjgl.opengl.GL20C.nglUniform4fv;
 import static org.lwjgl.opengl.GL30C.*;
 import static org.lwjgl.opengl.GL33.glBindSampler;
 import static org.lwjgl.opengl.GL43.GL_DEPTH_STENCIL_TEXTURE_MODE;
@@ -52,7 +55,9 @@ public class NormalRenderPipeline extends AbstractRenderPipeline {
         super(nodeManager, nodeCleaner, traversal, frexSupplier, false);
         this.useEnvFog = VoxyConfig.CONFIG.renderVanillaFog;
         this.finalBlit = new FullscreenBlit("voxy:post/blit_texture_depth_cutout.frag",
-                a->a.defineIf("USE_ENV_FOG", this.useEnvFog).define("EMIT_COLOUR"));
+                a -> a.defineIf("USE_ENV_FOG", this.useEnvFog)
+                        .define("EMIT_COLOUR")
+                        .defineIf("USE_ATMOSPHERIC_FOG", VoxyConfig.CONFIG.atmosphericFog));
     }
 
     @Override
@@ -130,6 +135,18 @@ public class NormalRenderPipeline extends AbstractRenderPipeline {
             } else {
                 glUniform4f(4, 0, 0, 0, 0);
                 glUniform4f(5, 0, 0, 0, 0);
+            }
+        }
+
+        if (VoxyConfig.CONFIG.atmosphericFog) {
+            try (var stack = MemoryStack.stackPush()) {
+                // density, falloff, start, unused
+                var params = stack.floats(0.001f, 1.5f, 128.0f, 0.0f);
+                nglUniform4fv(6, 1, MemoryUtil.memAddress(params));
+                
+                // atmospheric fog color (bluish grey)
+                var color = stack.floats(0.7f, 0.8f, 0.9f);
+                nglUniform3fv(7, 1, MemoryUtil.memAddress(color));
             }
         }
 

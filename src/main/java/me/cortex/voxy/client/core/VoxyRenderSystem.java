@@ -357,8 +357,9 @@ public class VoxyRenderSystem {
         //only increase quality while there are very few mesh queues, this stops,
         // e.g. while flying and is rendering alot of low quality chunks
         boolean canDecreaseSize = this.renderGen.getTaskCount() < 300;
-        int MIN_FPS = 55;
-        int MAX_FPS = 65;
+        int targetFPS = VoxyConfig.CONFIG.targetFPS;
+        int MIN_FPS = targetFPS - 5;
+        int MAX_FPS = targetFPS + 5;
         float INCREASE_PER_SECOND = 60;
         float DECREASE_PER_SECOND = 30;
         //Auto fps targeting
@@ -480,6 +481,31 @@ public class VoxyRenderSystem {
         Logger.info("Render shutdown completed");
     }
 
+    private static long getGeometryBufferSize() {
+        long geometryCapacity = Math.min((1L<<(64-Long.numberOfLeadingZeros(Capabilities.INSTANCE.ssboMaxSize-1)))<<1, 1L<<32)-1024/*(1L<<32)-1024*/;
+        if (Capabilities.INSTANCE.isIntel) {
+            geometryCapacity = Math.max(geometryCapacity, 1L<<30);//intel moment, force min 1gb
+        }
+
+        //Limit to available dedicated memory if possible
+        if (Capabilities.INSTANCE.canQueryGpuMemory) {
+            //512mb less than avalible,
+            long limit = Capabilities.INSTANCE.getFreeDedicatedGpuMemory() - (long)(1.5*1024*1024*1024);//1.5gb vram buffer
+            // Give a minimum of 512 mb requirement
+            limit = Math.max(512*1024*1024, limit);
+
+            geometryCapacity = Math.min(geometryCapacity, limit);
+        }
+        //geometryCapacity = 1<<28;
+        //geometryCapacity = 1<<30;//1GB test
+        var override = System.getProperty("voxy.geometryBufferSizeOverrideMB", "");
+        if (!override.isEmpty()) {
+            geometryCapacity = Long.parseLong(override)*1024L*1024L;
+        } else {
+            geometryCapacity = Math.min(geometryCapacity, (long)VoxyConfig.CONFIG.maxVramUsageMB * 1024L * 1024L);
+        }
+        return geometryCapacity;
+    }
     public WorldEngine getEngine() {
         return this.worldIn;
     }
