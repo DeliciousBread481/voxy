@@ -751,7 +751,37 @@ public class ModelFactory {
     }
 
     private static BlockColor getColourProvider(Block block) {
-        return Minecraft.getInstance().getBlockColors().blockColors.byId(BuiltInRegistries.BLOCK.getId(block));
+        var blockColors = Minecraft.getInstance().getBlockColors();
+        BlockColor provider = blockColors.blockColors.byId(BuiltInRegistries.BLOCK.getId(block));
+        if (provider == null) {
+            return null;
+        }
+
+        BlockState defaultState = block.defaultBlockState();
+        int fallbackColor = 0;
+        boolean hasFallbackColor = false;
+        try {
+            fallbackColor = provider.getColor(defaultState, null, BlockPos.ZERO, 0);
+            hasFallbackColor = true;
+        } catch (Exception e) {
+            Logger.warn("Failed to get colour provider for block: " + block.getDescriptionId() + " error: " + e.getMessage());
+        }
+
+        final int safeFallback = fallbackColor;
+        final boolean hasSafeFallback = hasFallbackColor;
+        return (state, world, pos, tintIndex) -> {
+            if (world == null) {
+                if (hasSafeFallback) {
+                    return safeFallback;
+                }
+                try {
+                    return provider.getColor(state, null, BlockPos.ZERO, tintIndex);
+                } catch (Exception ignored) {
+                    return 0;
+                }
+            }
+            return provider.getColor(state, world, pos, tintIndex);
+        };
     }
 
     //TODO: add a method to detect biome dependent colours (can do by detecting if getColor is ever called)
