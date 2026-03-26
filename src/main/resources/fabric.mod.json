@@ -42,5 +42,8 @@
   "suggests": {
     "java": ">=21"
   },
+  "breaks": {
+    "voxyworldgenv2": "=2.2.2"
+  },
   "accessWidener": "voxy.accesswidener"
 }

@@ -33,10 +33,9 @@ import me.cortex.voxy.common.voxelization.ArrayLightingSupplier;
 import me.cortex.voxy.common.voxelization.ILightingSupplier;
 import me.cortex.voxy.common.voxelization.VoxelizedSection;
 import me.cortex.voxy.common.voxelization.WorldConversionFactory;
+import me.cortex.voxy.common.voxelization.WorldVoxilizedSectionMipper;
 import me.cortex.voxy.common.world.WorldEngine;
 import me.cortex.voxy.common.world.WorldUpdater;
-import me.cortex.voxy.commonImpl.importers.IDataImporter.ICompletionCallback;
-import me.cortex.voxy.commonImpl.importers.IDataImporter.IUpdateCallback;
 import net.minecraft.core.Holder;
 import net.minecraft.core.IdMap;
 import net.minecraft.core.registries.Registries;
@@ -613,7 +612,7 @@ public class WorldImporter implements IDataImporter {
                 lightSupplier
         );
 
-        WorldConversionFactory.mipSection(csec, this.world.getMapper());
+        WorldVoxilizedSectionMipper.mipSection(csec, this.world.getMapper());
         WorldUpdater.insertUpdate(this.world, csec);
     }
 

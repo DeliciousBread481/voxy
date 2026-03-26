@@ -146,7 +146,7 @@ public class VoxyRenderSystem {
                     maxSec = 7;
                 }
 
-                this.renderDistanceTracker = new RenderDistanceTracker(20,
+                this.renderDistanceTracker = new RenderDistanceTracker(40,
                         minSec,
                         maxSec,
                         this.nodeManager::addTopLevel,
@@ -376,16 +376,18 @@ public class VoxyRenderSystem {
         }
     }
 
+    private static float getGameFoV() {
+        var client = Minecraft.getInstance();
+        var gameRenderer = client.gameRenderer;
+        return (float) gameRenderer.getFov(gameRenderer.getMainCamera(), client.getFrameTime(), true);
+    }
+
     private static Matrix4f makeProjectionMatrix(float near, float far) {
         //TODO: use the existing projection matrix use mulLocal by the inverse of the projection and then mulLocal our projection
 
         var projection = new Matrix4f();
         var client = Minecraft.getInstance();
-        var gameRenderer = client.gameRenderer;//tickCounter.getTickDelta(true);
-
-        float fov = (float)gameRenderer.getFov(gameRenderer.getMainCamera(), client.getFrameTime(), true);
-
-        projection.setPerspective(fov * 0.01745329238474369f,
+        projection.setPerspective(getGameFoV() * 0.01745329238474369f,
                 (float) client.getWindow().getWidth() / (float)client.getWindow().getHeight(),
                 near, far);
         return projection;
@@ -401,7 +403,7 @@ public class VoxyRenderSystem {
         nearVoxy = VoxyClient.disableSodiumChunkRender()?0.1f:nearVoxy;
 
         return base.mulLocal(
-                makeProjectionMatrix(0.05f, Minecraft.getInstance().gameRenderer.getDepthFar()).invert(),
+                Minecraft.getInstance().gameRenderer.getProjectionMatrix(getGameFoV()).invert(),
                 new Matrix4f()
         ).mulLocal(makeProjectionMatrix(nearVoxy, 16*3000));
     }

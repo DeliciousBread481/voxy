@@ -22,6 +22,7 @@ import me.cortex.voxy.common.util.MemoryBuffer;
 import me.cortex.voxy.common.util.UnsafeUtil;
 import me.cortex.voxy.common.world.WorldEngine;
 import me.cortex.voxy.common.world.WorldSection;
+import me.cortex.voxy.commonImpl.VoxyCommon;
 import org.lwjgl.system.MemoryUtil;
 
 import java.lang.invoke.MethodHandles;
@@ -45,6 +46,7 @@ import static org.lwjgl.opengl.GL43C.*;
 //An "async host" for a NodeManager, has specific synchonius entry and exit points
 // this is done off thread to reduce the amount of work done on the render thread, improving frame stability and reducing runtime overhead
 public class AsyncNodeManager {
+    private static final boolean VERIFY_NODE_MANAGER = VoxyCommon.isVerificationFlagOn("verifyNodeManager");
     private static final VarHandle RESULT_HANDLE;
     private static final VarHandle RESULT_CACHE_1_HANDLE;
     private static final VarHandle RESULT_CACHE_2_HANDLE;
@@ -105,11 +107,11 @@ public class AsyncNodeManager {
             }
         });
         this.thread.setUncaughtExceptionHandler((t,e)->{
-            this.running = false;
             if (e == null) {
                 e = new RuntimeException("null throwable");
             }
             this.uncaughtException = e;
+            this.running = false;
         });
         this.thread.setName("Async Node Manager");
 
@@ -495,6 +497,10 @@ public class AsyncNodeManager {
         if (!RESULT_HANDLE.compareAndSet(this, null, results)) {
             throw new IllegalArgumentException("Should always have null");
         }
+
+        if (VERIFY_NODE_MANAGER) {
+            this.manager.verifyIntegrity();
+        }
     }
 
     private IntConsumer tlnAddCallback; private IntConsumer tlnRemoveCallback;
@@ -633,7 +639,12 @@ public class AsyncNodeManager {
     private final LongOpenHashSet tlnRem = new LongOpenHashSet();
 
     private void addWork() {
-        if (!this.running) throw new IllegalStateException("Not running");
+        if (!this.running) {
+            if (this.uncaughtException != null) {
+                throw new RuntimeException(this.uncaughtException);//Propagate internal exception
+            }
+            throw new IllegalStateException("Not running");
+        }
         if (this.workCounter.getAndIncrement() == 0) {
             LockSupport.unpark(this.thread);
         }
