@@ -34,9 +34,6 @@ public abstract class MixinDebugScreenOverlay {
 
             GPUTiming.INSTANCE.setEnabled(isDebugOpen);
             RenderStatistics.enabled = isDebugOpen;
-
-            var renderer = Minecraft.getInstance().levelRenderer;
-            if (renderer != null) renderer.allChanged();
         }
     }
 
