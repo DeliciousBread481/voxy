@@ -872,36 +872,64 @@ public class ModelFactory {
 
     private static BlockColor getColourProvider(Block block) {
         var blockColors = Minecraft.getInstance().getBlockColors();
-        BlockColor provider = blockColors.blockColors.byId(BuiltInRegistries.BLOCK.getId(block));
-        if (provider == null) {
+        BlockState defaultState = block.defaultBlockState();
+
+        boolean[] tintCallbackUsed = new boolean[1];
+        var probeGetter = new BlockAndTintGetter() {
+            @Override
+            public float getShade(Direction direction, boolean shaded) {
+                return 0;
+            }
+
+            @Override
+            public int getBrightness(LightLayer type, BlockPos pos) {
+                return 0;
+            }
+
+            @Override
+            public LevelLightEngine getLightEngine() {
+                return null;
+            }
+
+            @Override
+            public int getBlockTint(BlockPos pos, ColorResolver colorResolver) {
+                tintCallbackUsed[0] = true;
+                return 0;
+            }
+
+            @Nullable
+            @Override
+            public BlockEntity getBlockEntity(BlockPos pos) {
+                return null;
+            }
+
+            @Override
+            public BlockState getBlockState(BlockPos pos) {
+                return defaultState;
+            }
+
+            @Override
+            public FluidState getFluidState(BlockPos pos) {
+                return defaultState.getFluidState();
+            }
+
+            @Override
+            public int getHeight() {
+                return 0;
+            }
+
+            @Override
+            public int getMinBuildHeight() {
+                return 0;
+            }
+        };
+
+        int probe0 = blockColors.getColor(defaultState, probeGetter, BlockPos.ZERO, 0);
+        int probe1 = blockColors.getColor(defaultState, probeGetter, BlockPos.ZERO, 1);
+        if (!tintCallbackUsed[0] && probe0 == -1 && probe1 == -1) {
             return null;
         }
-
-        BlockState defaultState = block.defaultBlockState();
-        int fallbackColor = 0;
-        boolean hasFallbackColor = false;
-        try {
-            fallbackColor = provider.getColor(defaultState, null, BlockPos.ZERO, 0);
-            hasFallbackColor = true;
-        } catch (Exception e) {
-            Logger.warn("Failed to get colour provider for block: " + block.getDescriptionId() + " error: " + e.getMessage());
-        }
-
-        final int safeFallback = fallbackColor;
-        final boolean hasSafeFallback = hasFallbackColor;
-        return (state, world, pos, tintIndex) -> {
-            if (world == null) {
-                if (hasSafeFallback) {
-                    return safeFallback;
-                }
-                try {
-                    return provider.getColor(state, null, BlockPos.ZERO, tintIndex);
-                } catch (Exception ignored) {
-                    return 0;
-                }
-            }
-            return provider.getColor(state, world, pos, tintIndex);
-        };
+        return (state, world, pos, tintIndex) -> blockColors.getColor(state, world, pos, tintIndex);
     }
 
     //TODO: add a method to detect biome dependent colours (can do by detecting if getColor is ever called)
