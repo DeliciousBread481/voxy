@@ -27,7 +27,7 @@ public abstract class MixinDebugScreenOverlay {
 
     @Inject(method = "render", at = @At("HEAD"))
     private void manageGpuTiming(GuiGraphics guiGraphics, CallbackInfo ci) {
-        boolean isDebugOpen = Minecraft.getInstance().options.renderDebug;
+        boolean isDebugOpen = Minecraft.getInstance().getDebugOverlay().showDebugScreen();
 
         if (isDebugOpen != lastDebugEnabledState) {
             lastDebugEnabledState = isDebugOpen;

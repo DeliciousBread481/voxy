@@ -6,12 +6,12 @@ import com.google.gson.GsonBuilder;
 import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.common.util.cpu.CpuLayout;
 import me.cortex.voxy.commonImpl.VoxyCommon;
-import me.jellysquid.mods.sodium.client.gui.options.storage.OptionStorage;
+import net.caffeinemc.mods.sodium.client.gui.options.storage.OptionStorage;
 import net.fabricmc.loader.api.FabricLoader;
 
-import java.io.FileReader;
 import java.io.IOException;
 import java.lang.reflect.Modifier;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -39,7 +39,7 @@ public class VoxyConfig implements OptionStorage<VoxyConfig> {
     private static VoxyConfig loadOrCreate() {
         var path = getConfigPath();
         if (Files.exists(path)) {
-            try (FileReader reader = new FileReader(path.toFile())) {
+            try (var reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
                 var conf = GSON.fromJson(reader, VoxyConfig.class);
                 if (conf != null) {
                     conf.save();
@@ -63,7 +63,7 @@ public class VoxyConfig implements OptionStorage<VoxyConfig> {
         }
 
         try {
-            Files.writeString(getConfigPath(), GSON.toJson(this));
+            Files.writeString(getConfigPath(), GSON.toJson(this), StandardCharsets.UTF_8);
         } catch (IOException e) {
             Logger.error("Failed to write config file", e);
         }

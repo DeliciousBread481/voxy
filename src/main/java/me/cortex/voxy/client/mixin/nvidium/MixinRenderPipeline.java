@@ -1,22 +1,9 @@
 package me.cortex.voxy.client.mixin.nvidium;
 
-import me.cortex.nvidium.RenderPipeline;
-import me.cortex.voxy.client.core.IGetVoxyRenderSystem;
-import me.jellysquid.mods.sodium.client.render.chunk.ChunkRenderMatrices;
-import me.jellysquid.mods.sodium.client.render.viewport.Viewport;
-import net.minecraft.client.Minecraft;
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-@Mixin(value = RenderPipeline.class, remap = false)
-public class MixinRenderPipeline {
-    @Inject(method = "renderFrame", at = @At("RETURN"))
-    private void voxy$injectRender(Viewport frustum, ChunkRenderMatrices crm, double px, double py, double pz, CallbackInfo ci) {
-        var renderer = ((IGetVoxyRenderSystem) Minecraft.getInstance().levelRenderer).getVoxyRenderSystem();
-        if (renderer != null) {
-            renderer.renderOpaque(renderer.setupViewport(crm, px, py, pz));
-        }
+// [高风险未适配] Nvidium 0.3.1 仍显式依赖 Sodium 0.5.9/0.5.11 的 API，
+// 与当前 1.21.1 基线使用的 Sodium 0.6.13 不兼容，故已在 mixins JSON 中禁用。
+// 详见 .vscode/MCP/agent-state.json 中对任务 7 的记录。
+public final class MixinRenderPipeline {
+    private MixinRenderPipeline() {
     }
 }

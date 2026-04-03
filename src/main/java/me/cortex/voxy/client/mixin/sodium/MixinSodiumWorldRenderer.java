@@ -5,19 +5,17 @@ import me.cortex.voxy.client.core.rendering.Viewport;
 import me.cortex.voxy.client.core.util.IrisUtil;
 import me.cortex.voxy.commonImpl.VoxyCommon;
 import me.cortex.voxy.commonImpl.VoxyInstance;
-import me.jellysquid.mods.sodium.client.gl.device.CommandList;
-import me.jellysquid.mods.sodium.client.render.SodiumWorldRenderer;
+import net.caffeinemc.mods.sodium.client.gl.device.CommandList;
+import net.caffeinemc.mods.sodium.client.render.SodiumWorldRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderType;
-import me.jellysquid.mods.sodium.client.render.chunk.ChunkRenderMatrices;
+import net.caffeinemc.mods.sodium.client.render.chunk.ChunkRenderMatrices;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import com.mojang.blaze3d.vertex.PoseStack;
 
 @Mixin(value = SodiumWorldRenderer.class, remap = false)
 public class MixinSodiumWorldRenderer {
@@ -30,9 +28,9 @@ public class MixinSodiumWorldRenderer {
     @Unique
     private ChunkRenderMatrices voxy$capturedMatrices;
 
-    // For Sodium 0.5.x (Fabric)
+    // Sodium 0.6.x path
     @Inject(
-        method = "drawChunkLayer(Lnet/minecraft/class_1921;Lme/jellysquid/mods/sodium/client/render/chunk/ChunkRenderMatrices;DDD)V",
+        method = "drawChunkLayer",
         at = @At("HEAD"),
         require = 0,
         remap = false
@@ -48,33 +46,8 @@ public class MixinSodiumWorldRenderer {
         this.voxy$capturedMatrices = matrices;
     }
 
-    // For Embedium/Older Sodium (Forge/Fabric)
-    @Inject(
-        method = "drawChunkLayer(Lnet/minecraft/client/renderer/RenderType;Lcom/mojang/blaze3d/vertex/PoseStack;DDD)V",
-        at = @At("HEAD"),
-        require = 0,
-        remap = false
-    )
-    private void voxy$captureMatricesEmbedium(
-            RenderType renderLayer,
-            PoseStack matrixStack,
-            double x,
-            double y,
-            double z,
-            CallbackInfo ci
-    ) {
-        this.voxy$capturedMatrices = ChunkRenderMatrices.from(matrixStack);
-    }
-
-    // For Sodium 0.5.x (Fabric)
-    @Inject(method = "drawChunkLayer(Lnet/minecraft/class_1921;Lme/jellysquid/mods/sodium/client/render/chunk/ChunkRenderMatrices;DDD)V", at = @At("TAIL"), require = 0, remap = false)
+    @Inject(method = "drawChunkLayer", at = @At("TAIL"), require = 0, remap = false)
     private void injectRenderSodium(RenderType renderLayer, ChunkRenderMatrices matrices, double x, double y, double z, CallbackInfo ci) {
-        this.doRender(this.voxy$capturedMatrices, renderLayer, x, y, z);
-    }
-
-    // For Embedium/Older Sodium (Forge/Fabric)
-    @Inject(method = "drawChunkLayer(Lnet/minecraft/client/renderer/RenderType;Lcom/mojang/blaze3d/vertex/PoseStack;DDD)V", at = @At("TAIL"), require = 0, remap = false)
-    private void injectRenderEmbedium(RenderType renderLayer, PoseStack matrixStack, double x, double y, double z, CallbackInfo ci) {
         this.doRender(this.voxy$capturedMatrices, renderLayer, x, y, z);
     }
     

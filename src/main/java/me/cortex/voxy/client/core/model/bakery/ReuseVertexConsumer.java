@@ -27,13 +27,13 @@ public final class ReuseVertexConsumer implements VertexConsumer {
     }
 
     @Override
-    public ReuseVertexConsumer vertex(double x, double y, double z) {
+    public ReuseVertexConsumer addVertex(float x, float y, float z) {
         this.ensureCanPut();
         this.ptr += VERTEX_FORMAT_SIZE; this.count++; //Goto next vertex
         this.meta(this.defaultMeta);
-        MemoryUtil.memPutFloat(this.ptr, (float) x);
-        MemoryUtil.memPutFloat(this.ptr + 4, (float) y);
-        MemoryUtil.memPutFloat(this.ptr + 8, (float) z);
+        MemoryUtil.memPutFloat(this.ptr, x);
+        MemoryUtil.memPutFloat(this.ptr + 4, y);
+        MemoryUtil.memPutFloat(this.ptr + 8, z);
         return this;
     }
 
@@ -43,34 +43,29 @@ public final class ReuseVertexConsumer implements VertexConsumer {
     }
 
     @Override
-    public ReuseVertexConsumer color(int red, int green, int blue, int alpha) {
+    public ReuseVertexConsumer setColor(int red, int green, int blue, int alpha) {
         return this;
     }
 
     @Override
-    public VertexConsumer color(int i) {
-        return this;
-    }
-
-    @Override
-    public ReuseVertexConsumer uv(float u, float v) {
+    public ReuseVertexConsumer setUv(float u, float v) {
         MemoryUtil.memPutFloat(this.ptr + 16, u);
         MemoryUtil.memPutFloat(this.ptr + 20, v);
         return this;
     }
 
     @Override
-    public ReuseVertexConsumer overlayCoords(int u, int v) {
+    public ReuseVertexConsumer setUv1(int u, int v) {
         return this;
     }
 
     @Override
-    public ReuseVertexConsumer uv2(int u, int v) {
+    public ReuseVertexConsumer setUv2(int u, int v) {
         return this;
     }
 
     @Override
-    public ReuseVertexConsumer normal(float x, float y, float z) {
+    public ReuseVertexConsumer setNormal(float x, float y, float z) {
         return this;
     }
 
@@ -84,10 +79,10 @@ public final class ReuseVertexConsumer implements VertexConsumer {
             float x = Float.intBitsToFloat(data[offset]);
             float y = Float.intBitsToFloat(data[offset + 1]);
             float z = Float.intBitsToFloat(data[offset + 2]);
-            this.vertex(x, y, z);
+            this.addVertex(x, y, z);
             float u = Float.intBitsToFloat(data[offset + 4]);
             float v = Float.intBitsToFloat(data[offset + 5]);
-            this.uv(u, v);
+            this.setUv(u, v);
 
             this.meta(metadata);
         }
@@ -134,20 +129,5 @@ public final class ReuseVertexConsumer implements VertexConsumer {
 
     public long getAddress() {
         return this.buffer.address;
-    }
-
-    @Override
-    public void defaultColor(int red, int green, int blue, int alpha) {
-        return;
-    }
-
-    @Override
-    public void endVertex() {
-        return;
-    }
-
-    @Override
-    public void unsetDefaultColor() {
-        return;
     }
 }

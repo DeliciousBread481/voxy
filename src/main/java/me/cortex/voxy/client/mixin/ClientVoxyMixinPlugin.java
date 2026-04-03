@@ -17,7 +17,7 @@ public class ClientVoxyMixinPlugin implements IMixinConfigPlugin {
     @Override
     public void onLoad(String mixinPackage) {
         try (InputStream stream = getClass().getClassLoader()
-                .getResourceAsStream("me/jellysquid/mods/sodium/client/render/SodiumWorldRenderer.class")) {
+                .getResourceAsStream("net/caffeinemc/mods/sodium/client/render/SodiumWorldRenderer.class")) {
 
             if (stream != null) {
                 ClassReader reader = new ClassReader(stream);

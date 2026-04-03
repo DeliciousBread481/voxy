@@ -10,6 +10,7 @@ import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
 import java.lang.reflect.Modifier;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -103,7 +104,7 @@ public class VoxyConfigStore {
 
     public void save() {
         try {
-            Files.writeString(getConfigPath(), this.gson.toJson(this));
+            Files.writeString(getConfigPath(), this.gson.toJson(this), StandardCharsets.UTF_8);
         } catch (IOException e) {
             Logger.error("Failed to write config file", e);
         }

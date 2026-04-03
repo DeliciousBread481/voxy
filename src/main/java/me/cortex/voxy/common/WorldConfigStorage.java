@@ -6,9 +6,9 @@ import com.google.gson.stream.JsonWriter;
 import me.cortex.voxy.commonImpl.VoxyCommon;
 import me.cortex.voxy.commonImpl.WorldIdentifier;
 
-import java.io.FileReader;
 import java.io.IOException;
 import java.lang.reflect.Modifier;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -122,7 +122,7 @@ public class WorldConfigStorage<T> {
 
     private void load() {
         if (Files.exists(this.file)) {
-            try (FileReader reader = new FileReader(this.file.toFile())) {
+            try (var reader = Files.newBufferedReader(this.file, StandardCharsets.UTF_8)) {
                 var conf = this.gson.fromJson(reader, InnerHolder.class);
                 if (conf != null) {
                     this.worldConfigs.clear();
@@ -172,7 +172,7 @@ public class WorldConfigStorage<T> {
         try {
             var holder = new InnerHolder<T>();
             holder.worldConfigs.putAll(this.worldConfigs);
-            Files.writeString(this.file, this.gson.toJson(holder));
+            Files.writeString(this.file, this.gson.toJson(holder), StandardCharsets.UTF_8);
         } catch (IOException e) {
             Logger.error("Failed to write config file", e);
         }

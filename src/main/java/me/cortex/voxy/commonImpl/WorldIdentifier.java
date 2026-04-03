@@ -20,7 +20,10 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 public class WorldIdentifier {
-    private static final ResourceKey<DimensionType> NULL_DIM_KEY = ResourceKey.create(Registries.DIMENSION_TYPE, ResourceLocation.tryParse("voxy:null_dimension_id"));
+    private static final ResourceKey<DimensionType> NULL_DIM_KEY = ResourceKey.create(
+            Registries.DIMENSION_TYPE,
+            ResourceLocation.fromNamespaceAndPath("voxy", "null_dimension_id")
+    );
 
     public final ResourceKey<Level> key;
     public final long biomeSeed;
@@ -192,9 +195,19 @@ public class WorldIdentifier {
             long biomeSeed = obj.getAsJsonPrimitive("biomeSeed").getAsLong();
             var sDim = obj.getAsJsonPrimitive("dimension").getAsString();
 
-            var key = ResourceKey.create(Registries.DIMENSION, ResourceLocation.tryParse(sKey));
-            var dim = ResourceKey.create(Registries.DIMENSION_TYPE, ResourceLocation.tryParse(sDim));
+            var keyLocation = requireResourceLocation(sKey, "world key");
+            var dimLocation = requireResourceLocation(sDim, "dimension key");
+            var key = ResourceKey.create(Registries.DIMENSION, keyLocation);
+            var dim = ResourceKey.create(Registries.DIMENSION_TYPE, dimLocation);
             return new WorldIdentifier(key, biomeSeed, dim);
+        }
+
+        private static ResourceLocation requireResourceLocation(String value, String label) throws IOException {
+            var location = ResourceLocation.tryParse(value);
+            if (location == null) {
+                throw new IOException("Invalid " + label + ": " + value);
+            }
+            return location;
         }
     }
 }

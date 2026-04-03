@@ -2,12 +2,11 @@ package me.cortex.voxy.client.config;
 
 import com.terraformersmc.modmenu.api.ConfigScreenFactory;
 import com.terraformersmc.modmenu.api.ModMenuApi;
-import me.cortex.voxy.client.mixin.sodium.AccessorSodiumOptionsGUI;
 import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.commonImpl.VoxyCommon;
-import me.jellysquid.mods.sodium.client.SodiumClientMod;
-import me.jellysquid.mods.sodium.client.gui.SodiumOptionsGUI;
-import me.jellysquid.mods.sodium.client.gui.screen.ConfigCorruptedScreen;
+import net.caffeinemc.mods.sodium.client.SodiumClientMod;
+import net.caffeinemc.mods.sodium.client.gui.SodiumOptionsGUI;
+import net.caffeinemc.mods.sodium.client.gui.screen.ConfigCorruptedScreen;
 import net.minecraft.client.gui.screens.Screen;
 
 public class ModMenuIntegration implements ModMenuApi {
@@ -15,7 +14,9 @@ public class ModMenuIntegration implements ModMenuApi {
     public ConfigScreenFactory<?> getModConfigScreenFactory() {
         return parent -> {
             if (VoxyCommon.isAvailable()) {
-                Screen screen = SodiumClientMod.options().isReadOnly() ? new ConfigCorruptedScreen(parent, AccessorSodiumOptionsGUI::newScreen) : AccessorSodiumOptionsGUI.newScreen(parent);
+                Screen screen = SodiumClientMod.options().isReadOnly()
+                        ? new ConfigCorruptedScreen(parent, SodiumOptionsGUI::createScreen)
+                        : SodiumOptionsGUI.createScreen(parent);
                 //Sorry jelly and douira, please dont hurt me
                 try {
                     //We cant use .setPage() as that invokes rebuildGui, however the screen hasnt been initalized yet

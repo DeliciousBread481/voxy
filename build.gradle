@@ -1,5 +1,5 @@
 plugins {
-    id 'fabric-loom' version "1.14-SNAPSHOT"
+    id 'fabric-loom' version "${loom_version}"
     id 'maven-publish'
 }
 
@@ -25,20 +25,6 @@ repositories {
             includeGroup "maven.modrinth"
         }
     }
-
-    exclusiveContent {
-        forRepository {
-            maven {
-                name "flashyreeseRepository"
-                url "https://maven.flashyreese.me/releases"
-            }
-        }
-        filter {
-            includeGroup "net.caffeinemc"
-        }
-    }
-
-
 
     maven { url = "https://maven.shedaniel.me/" }
     maven { url = "https://maven.terraformersmc.com/releases/" }
@@ -128,19 +114,19 @@ dependencies {
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
     //TODO: this is to eventually not need sodium installed as atm its just used for parsing shaders
-    modRuntimeOnlyMsk "maven.modrinth:sodium:mc1.20.1-0.5.13-fabric"
-    modCompileOnly "maven.modrinth:sodium:mc1.20.1-0.5.13-fabric"
+    modRuntimeOnlyMsk "maven.modrinth:sodium:${project.sodium_version}"
+    modCompileOnly "maven.modrinth:sodium:${project.sodium_version}"
 
-    modImplementation("maven.modrinth:lithium:mc1.20.1-0.11.4-fabric")
+    modImplementation("maven.modrinth:lithium:${project.lithium_version}")
 
     // modRuntimeOnlyMsk "drouarb:nvidium:0.4.1-beta9:1.21-1.21.1@jar"
-    modCompileOnly "maven.modrinth:nvidium:0.2.6-beta-1.20.1"
+    modCompileOnly "maven.modrinth:nvidium:${project.nvidium_version}"
 
-    modCompileOnly("maven.modrinth:modmenu:7.2.2")
-    modRuntimeOnlyMsk("maven.modrinth:modmenu:7.2.2")
+    modCompileOnly("maven.modrinth:modmenu:${project.modmenu_version}")
+    modRuntimeOnlyMsk("maven.modrinth:modmenu:${project.modmenu_version}")
 
-    modCompileOnly("maven.modrinth:iris:1.7.6+1.20.1")
-    modRuntimeOnlyMsk("maven.modrinth:iris:1.7.6+1.20.1")
+    modCompileOnly("maven.modrinth:iris:${project.iris_version}")
+    modRuntimeOnlyMsk("maven.modrinth:iris:${project.iris_version}")
     // iris needs these for some reason
     modRuntimeOnlyMsk("io.github.douira:glsl-transformer:2.0.1")
     modRuntimeOnlyMsk("org.anarres:jcpp:1.4.14")
@@ -149,20 +135,19 @@ dependencies {
 
     //modCompileOnly("maven.modrinth:immersiveportals:v5.1.7-mc1.20.4")
 
-    modCompileOnly("maven.modrinth:sodium-extra:mc1.20.1-0.5.9")
-    modRuntimeOnlyMsk("maven.modrinth:sodium-extra:mc1.20.1-0.5.9")
-    modRuntimeOnlyMsk("net.caffeinemc:CaffeineConfig:1.3.0+1.17")
+    modCompileOnly("maven.modrinth:sodium-extra:${project.sodium_extra_version}")
+    modRuntimeOnlyMsk("maven.modrinth:sodium-extra:${project.sodium_extra_version}")
 
-    modCompileOnly("maven.modrinth:Chunky:1.3.146-fabric")
-    modRuntimeOnlyMsk("maven.modrinth:Chunky:1.3.146-fabric")
+    modCompileOnly("maven.modrinth:Chunky:${project.chunky_version}")
+    modRuntimeOnlyMsk("maven.modrinth:Chunky:${project.chunky_version}")
 
     // modRuntimeOnlyMsk("maven.modrinth:spark:1.10.53-fabric")
-    modRuntimeOnlyMsk("maven.modrinth:fabric-permissions-api:0.3.1")
+    modRuntimeOnlyMsk("maven.modrinth:fabric-permissions-api:${project.fabric_permissions_api_version}")
     //modRuntimeOnly("maven.modrinth:nsight-loader:1.2.0")
 
     //modImplementation('io.github.douira:glsl-transformer:2.0.1')
 
-    modCompileOnly("maven.modrinth:vivecraft:1.20.1-1.3.7-fabric")
+    modCompileOnly("maven.modrinth:vivecraft:${project.vivecraft_version}")
 
     // modCompileOnly("maven.modrinth:flashback:rNCr1Rbs")
 
@@ -171,9 +156,9 @@ dependencies {
     // modCompileOnly("com.seibel.distanthorizons:core:core-2.4.1-b-dev-1.20.1")
     // modCompileOnly("com.seibel.distanthorizons:DistantHorizons:common-2.4.1-b-dev-1.20.1")
     // modRuntimeOnlyMsk("com.seibel.distanthorizons:DistantHorizons:fabric-2.4.1-b-dev-1.20.1")
-    modCompileOnly("maven.modrinth:DistantHorizons:2.4.5-b-1.20.1")
-    modRuntimeOnlyMsk("maven.modrinth:DistantHorizons:2.4.5-b-1.20.1")
-    modRuntimeOnlyMsk("maven.modrinth:indium:1.0.36+mc1.20.1")
+    modCompileOnly("maven.modrinth:DistantHorizons:${project.distanthorizons_version}")
+    modRuntimeOnlyMsk("maven.modrinth:DistantHorizons:${project.distanthorizons_version}")
+    // Sodium 0.6+ includes FRAPI support, so Indium must stay removed on 1.21.1.
 }
 
 
@@ -302,7 +287,7 @@ remapJar {
     }
 }
 
-project.ext.lwjglVersion = "3.3.1"
+project.ext.lwjglVersion = project.lwjgl_version
 project.ext.lwjglNatives = "natives-windows"
 
 repositories {
