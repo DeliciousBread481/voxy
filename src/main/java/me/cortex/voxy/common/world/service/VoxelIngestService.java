@@ -29,19 +29,26 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class VoxelIngestService {
     private static final ConcurrentLinkedQueue<byte[]> LIGHT_DATA_POOL = new ConcurrentLinkedQueue<>();
+
     private static byte[] acquireLightData(byte[] source) {
-        if (source == null) return null;
+        if (source == null)
+            return null;
         byte[] data = LIGHT_DATA_POOL.poll();
-        if (data == null) data = new byte[2048];
+        if (data == null)
+            data = new byte[2048];
         System.arraycopy(source, 0, data, 0, 2048);
         return data;
     }
+
     private static void releaseLightData(byte[] data) {
-        if (data != null) LIGHT_DATA_POOL.add(data);
+        if (data != null)
+            LIGHT_DATA_POOL.add(data);
     }
 
-    private static final ThreadLocal<VoxelizedSection> SECTION_CACHE = ThreadLocal.withInitial(VoxelizedSection::createEmpty);
+    private static final ThreadLocal<VoxelizedSection> SECTION_CACHE = ThreadLocal
+            .withInitial(VoxelizedSection::createEmpty);
     private final Service service;
+
     public static class IngestSection {
         final int cx;
         final int cy;
@@ -53,7 +60,8 @@ public class VoxelIngestService {
         final byte[] blockLight;
         final byte[] skyLight;
 
-        public IngestSection(int cx, int cy, int cz, WorldEngine world, PalettedContainer<BlockState> states, PalettedContainerRO<Holder<Biome>> biomes, boolean onlyAir, byte[] blockLight, byte[] skyLight) {
+        public IngestSection(int cx, int cy, int cz, WorldEngine world, PalettedContainer<BlockState> states,
+                PalettedContainerRO<Holder<Biome>> biomes, boolean onlyAir, byte[] blockLight, byte[] skyLight) {
             this.cx = cx;
             this.cy = cy;
             this.cz = cz;
@@ -65,10 +73,11 @@ public class VoxelIngestService {
             this.skyLight = skyLight;
         }
     }
+
     private final ConcurrentLinkedDeque<IngestSection> ingestQueue = new ConcurrentLinkedDeque<>();
 
     public VoxelIngestService(ServiceManager pool) {
-        this.service = pool.createServiceNoCleanup(()->this::processJob, 5000, "Ingest service");
+        this.service = pool.createServiceNoCleanup(() -> this::processJob, 5000, "Ingest service");
     }
 
     private void processJob() {
@@ -86,8 +95,7 @@ public class VoxelIngestService {
                     task.world.getMapper(),
                     task.states,
                     task.biomes,
-                    lightSupplier
-            );
+                    lightSupplier);
             WorldVoxilizedSectionMipper.mipSection(csec, task.world.getMapper());
             WorldUpdater.insertUpdate(task.world, csec);
         }
@@ -103,7 +111,8 @@ public class VoxelIngestService {
         }
     }
 
-    private static IngestSection snapshotSection(int cx, int cy, int cz, WorldEngine world, LevelChunkSection section, byte[] blockLight, byte[] skyLight) {
+    private static IngestSection snapshotSection(int cx, int cy, int cz, WorldEngine world, LevelChunkSection section,
+            byte[] blockLight, byte[] skyLight) {
         boolean onlyAir = section.hasOnlyAir();
         PalettedContainer<BlockState> states = onlyAir ? null : section.getStates().copy();
         PalettedContainerRO<Holder<Biome>> biomes = section.getBiomes();
@@ -136,28 +145,31 @@ public class VoxelIngestService {
         boolean allEmpty = true;
         for (var section : chunk.getSections()) {
             i++;
-            if (section == null || !shouldIngestSection(section, chunk.getPos().x, i, chunk.getPos().z)) continue;
-            allEmpty&=section.hasOnlyAir();
-            //if (section.isEmpty()) continue;
+            if (section == null || !shouldIngestSection(section, chunk.getPos().x, i, chunk.getPos().z))
+                continue;
+            allEmpty &= section.hasOnlyAir();
+            // if (section.isEmpty()) continue;
             var pos = SectionPos.of(chunk.getPos(), i);
-            if (lightingProvider.getDebugSectionType(LightLayer.SKY, pos) != LayerLightSectionStorage.SectionType.LIGHT_AND_DATA && lightingProvider.getDebugSectionType(LightLayer.BLOCK, pos) != LayerLightSectionStorage.SectionType.LIGHT_AND_DATA)
+            if (lightingProvider.getDebugSectionType(LightLayer.SKY,
+                    pos) != LayerLightSectionStorage.SectionType.LIGHT_AND_DATA
+                    && lightingProvider.getDebugSectionType(LightLayer.BLOCK,
+                            pos) != LayerLightSectionStorage.SectionType.LIGHT_AND_DATA)
                 continue;
             gotLighting = true;
         }
 
-        if (allEmpty&&!gotLighting) {
-            //Special case all empty chunk columns, we need to clear it out
-            boolean added = false;
+        if (allEmpty && !gotLighting) {
             i = chunk.getMinSection() - 1;
             for (var section : chunk.getSections()) {
                 i++;
-                if (section == null || !shouldIngestSection(section, chunk.getPos().x, i, chunk.getPos().z)) continue;
-                this.ingestQueue.add(snapshotSection(chunk.getPos().x, i, chunk.getPos().z, engine, section, null, null));
-                added = true;
-            }
-            if (added) {
-                if (!this.service.tryExecute()) {
-                    this.discardQueuedIngestTasks();
+                if (section == null || !shouldIngestSection(section, chunk.getPos().x, i, chunk.getPos().z))
+                    continue;
+                this.ingestQueue
+                        .add(snapshotSection(chunk.getPos().x, i, chunk.getPos().z, engine, section, null, null));
+                try {
+                    this.service.execute();
+                } catch (Exception e) {
+                    Logger.error("Executing had an error: assume shutting down, aborting", e);
                     return false;
                 }
             }
@@ -170,12 +182,11 @@ public class VoxelIngestService {
         var blp = lightingProvider.getLayerListener(LightLayer.BLOCK);
         var slp = lightingProvider.getLayerListener(LightLayer.SKY);
 
-
-        boolean added = false;
         i = chunk.getMinSection() - 1;
         for (var section : chunk.getSections()) {
             i++;
-            if (section == null || !shouldIngestSection(section, chunk.getPos().x, i, chunk.getPos().z)) continue;
+            if (section == null || !shouldIngestSection(section, chunk.getPos().x, i, chunk.getPos().z))
+                continue;
             var pos = SectionPos.of(chunk.getPos(), i);
 
             var bl = blp.getDataLayerData(pos);
@@ -184,12 +195,12 @@ public class VoxelIngestService {
             var sl = slp.getDataLayerData(pos);
             byte[] slData = acquireLightData(sl != null ? sl.getData() : null);
 
-            this.ingestQueue.add(snapshotSection(chunk.getPos().x, i, chunk.getPos().z, engine, section, blData, slData));
-            added = true;
-        }
-        if (added) {
-            if (!this.service.tryExecute()) {
-                this.discardQueuedIngestTasks();
+            this.ingestQueue
+                    .add(snapshotSection(chunk.getPos().x, i, chunk.getPos().z, engine, section, blData, slData));
+            try {
+                this.service.execute();
+            } catch (Exception e) {
+                Logger.error("Executing had an error: assume shutting down, aborting", e);
                 return false;
             }
         }
@@ -204,51 +215,61 @@ public class VoxelIngestService {
         this.service.shutdown();
     }
 
-    //Utility method to ingest a chunk into the given WorldIdentifier or world
+    // Utility method to ingest a chunk into the given WorldIdentifier or world
     public static boolean tryIngestChunk(WorldIdentifier worldId, LevelChunk chunk) {
-        if (worldId == null) return false;
+        if (worldId == null)
+            return false;
         var instance = VoxyCommon.getInstance();
-        if (instance == null) return false;
-        if (!instance.isIngestEnabled(worldId)) return false;
+        if (instance == null)
+            return false;
+        if (!instance.isIngestEnabled(worldId))
+            return false;
         var engine = instance.getOrCreate(worldId);
-        if (engine == null) return false;
+        if (engine == null)
+            return false;
         return instance.getIngestService().enqueueIngest(engine, chunk);
     }
 
-    //Try to automatically ingest the chunk into the correct world
+    // Try to automatically ingest the chunk into the correct world
     public static boolean tryAutoIngestChunk(LevelChunk chunk) {
         return tryIngestChunk(WorldIdentifier.of(chunk.getLevel()), chunk);
     }
 
-    private boolean rawIngest0(WorldEngine engine, LevelChunkSection section, int x, int y, int z, byte[] bl, byte[] sl) {
+    private boolean rawIngest0(WorldEngine engine, LevelChunkSection section, int x, int y, int z, byte[] bl,
+            byte[] sl) {
         if (!this.service.isLive()) {
             releaseLightData(bl);
             releaseLightData(sl);
             return false;
         }
-        IngestSection task = snapshotSection(x, y, z, engine, section, bl, sl);
-        this.ingestQueue.add(task);
-        if (!this.service.tryExecute()) {
-            if (this.ingestQueue.remove(task)) {
-                releaseLightData(task.blockLight);
-                releaseLightData(task.skyLight);
-            }
+        this.ingestQueue.add(snapshotSection(x, y, z, engine, section, bl, sl));
+        try {
+            this.service.execute();
+            return true;
+        } catch (Exception e) {
+            Logger.error("Executing had an error: assume shutting down, aborting", e);
             return false;
         }
-        return true;
     }
 
-    public static boolean rawIngest(WorldIdentifier id, LevelChunkSection section, int x, int y, int z, DataLayer bl, DataLayer sl) {
-        if (id == null) return false;
+    public static boolean rawIngest(WorldIdentifier id, LevelChunkSection section, int x, int y, int z, DataLayer bl,
+            DataLayer sl) {
+        if (id == null)
+            return false;
         var engine = id.getOrCreateEngine();
-        if (engine == null) return false;
+        if (engine == null)
+            return false;
         return rawIngest(engine, section, x, y, z, bl, sl);
     }
 
-    public static boolean rawIngest(WorldEngine engine, LevelChunkSection section, int x, int y, int z, DataLayer bl, DataLayer sl) {
-        if (!shouldIngestSection(section, x, y, z)) return false;
-        if (engine.instanceIn == null) return false;
-        if (!engine.instanceIn.isIngestEnabled(null)) return false;//TODO: dont pass in null
+    public static boolean rawIngest(WorldEngine engine, LevelChunkSection section, int x, int y, int z, DataLayer bl,
+            DataLayer sl) {
+        if (!shouldIngestSection(section, x, y, z))
+            return false;
+        if (engine.instanceIn == null)
+            return false;
+        if (!engine.instanceIn.isIngestEnabled(null))
+            return false;// TODO: dont pass in null
         byte[] blData = acquireLightData(bl != null ? bl.getData() : null);
         byte[] slData = acquireLightData(sl != null ? sl.getData() : null);
         return engine.instanceIn.getIngestService().rawIngest0(engine, section, x, y, z, blData, slData);
