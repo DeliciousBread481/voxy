@@ -32,8 +32,8 @@ public class MixinLevelRenderer {
             Camera camera,
             GameRenderer gameRenderer,
             LightTexture lightTexture,
+            Matrix4f positionMatrix,
             Matrix4f projectionMatrix,
-            Matrix4f modelViewMatrix,
             CallbackInfo ci) {
         if (IrisUtil.irisShaderPackEnabled()) {
             var renderer = ((IGetVoxyRenderSystem) this).getVoxyRenderSystem();
@@ -42,7 +42,7 @@ public class MixinLevelRenderer {
                 glViewport(0,0,Minecraft.getInstance().getMainRenderTarget().width, Minecraft.getInstance().getMainRenderTarget().height);
 
                 var pos = camera.getPosition();
-                IrisUtil.CAPTURED_VIEWPORT_PARAMETERS = new IrisUtil.CapturedViewportParameters(new ChunkRenderMatrices(projectionMatrix, modelViewMatrix), pos.x, pos.y, pos.z);
+                IrisUtil.CAPTURED_VIEWPORT_PARAMETERS = new IrisUtil.CapturedViewportParameters(new ChunkRenderMatrices(projectionMatrix, positionMatrix), pos.x, pos.y, pos.z);
             }
         }
     }
