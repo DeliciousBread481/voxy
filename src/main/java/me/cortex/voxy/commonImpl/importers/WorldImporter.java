@@ -41,6 +41,7 @@ import net.minecraft.core.IdMap;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.core.Registry;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
@@ -59,6 +60,12 @@ import net.minecraft.world.level.chunk.PalettedContainerRO.PackedData;
 import net.minecraft.world.level.chunk.storage.RegionFileVersion;
 
 public class WorldImporter implements IDataImporter {
+    private static final int SECTION_STATE_ENTRY_COUNT = 16 * 16 * 16;
+    private static final int COMPACT_BLOCK_STATES_LENGTH_5BIT = 320;
+    private static final int COMPACT_BLOCK_STATES_LENGTH_6BIT = 384;
+    private static final int RECOVERY_DETAIL_LOG_LIMIT = 8;
+    private static final int RECOVERY_SUMMARY_LOG_INTERVAL = 64;
+
     private final WorldEngine world;
     private final PalettedContainerRO<Holder<Biome>> defaultBiomeProvider;
     private final Codec<PalettedContainerRO<Holder<Biome>>> biomeCodec;
@@ -66,6 +73,7 @@ public class WorldImporter implements IDataImporter {
     private final AtomicInteger estimatedTotalChunks = new AtomicInteger();//Slowly converges to the true value
     private final AtomicInteger totalChunks = new AtomicInteger();
     private final AtomicInteger chunksProcessed = new AtomicInteger();
+    private final AtomicInteger recoveredCompactStorageCount = new AtomicInteger();
 
     private final ConcurrentLinkedDeque<Runnable> jobQueue = new ConcurrentLinkedDeque<>();
     private final Service service;
@@ -442,27 +450,29 @@ public class WorldImporter implements IDataImporter {
     }
 
     private void importChunkNBT(CompoundTag chunk, int regionX, int regionZ) {
-        if (!chunk.contains("Status")) {
-            //Its not real so decrement the chunk
+        CompoundTag chunkData = this.resolveChunkData(chunk);
+        ListTag sections = this.getSectionList(chunkData);
+        if (sections == null || sections.isEmpty()) {
             this.totalChunks.decrementAndGet();
             return;
         }
 
-        //Dont process non full chunk sections
-        var status = ChunkStatus.byName(chunk.getString("Status"));
-        if (status == null || (status != ChunkStatus.FULL && status != ChunkStatus.EMPTY)) {//We also import empty since they are from data upgrade
-            this.totalChunks.decrementAndGet();
-            return;
+        if (chunkData.contains("Status", Tag.TAG_STRING)) {
+            var status = ChunkStatus.byName(chunkData.getString("Status"));
+            if (status != null && status != ChunkStatus.FULL && status != ChunkStatus.EMPTY) {
+                this.totalChunks.decrementAndGet();
+                return;
+            }
         }
 
         try {
-            int x = chunk.getInt("xPos");
-            int z = chunk.getInt("zPos");
+            int x = chunkData.getInt("xPos");
+            int z = chunkData.getInt("zPos");
             if (x>>5 != regionX || z>>5 != regionZ) {
                 Logger.error("Chunk position is not located in correct region, expected: (" + regionX + ", " + regionZ+"), got: " + "(" + (x>>5) + ", " + (z>>5)+"), importing anyway");
             }
 
-            for (var sectionE : chunk.getList("sections", Tag.TAG_COMPOUND)) {
+            for (var sectionE : sections) {
                 var section = (CompoundTag) sectionE;
                 int y = section.getInt("Y");
                 this.importSectionNBT(x, y, z, section);
@@ -474,10 +484,59 @@ public class WorldImporter implements IDataImporter {
         this.updateCallback.onUpdate(this.chunksProcessed.incrementAndGet(), this.estimatedTotalChunks.get());
     }
 
-    private static final byte[] EMPTY = new byte[0];
+    private CompoundTag resolveChunkData(CompoundTag chunk) {
+        if (chunk.contains("Level", Tag.TAG_COMPOUND)) {
+            return chunk.getCompound("Level");
+        }
+        return chunk;
+    }
+
+    private ListTag getSectionList(CompoundTag chunkData) {
+        if (chunkData.contains("sections", Tag.TAG_LIST)) {
+            return chunkData.getList("sections", Tag.TAG_COMPOUND);
+        }
+        if (chunkData.contains("Sections", Tag.TAG_LIST)) {
+            return chunkData.getList("Sections", Tag.TAG_COMPOUND);
+        }
+        return null;
+    }
+
     private static final ThreadLocal<VoxelizedSection> SECTION_CACHE = ThreadLocal.withInitial(VoxelizedSection::createEmpty);
     private void importSectionNBT(int x, int y, int z, CompoundTag section) {
-        if (section.getCompound("block_states").isEmpty()) {
+        PalettedContainer<BlockState> blockStates;
+        PalettedContainerRO<Holder<Biome>> biomes = this.defaultBiomeProvider;
+
+        CompoundTag blockStatesTag = section.getCompound("block_states");
+        if (!blockStatesTag.isEmpty()) {
+            blockStates = this.decodeBlockStatesWithCompactFallback(blockStatesTag, x, y, z, false);
+            if (blockStates == null) {
+                return;
+            }
+
+            var optBiomes = section.getCompound("biomes");
+            if (!optBiomes.isEmpty()) {
+                biomes = this.biomeCodec.parse(NbtOps.INSTANCE, optBiomes).result().orElse(this.defaultBiomeProvider);
+            }
+        } else if (section.contains("Palette", Tag.TAG_LIST)) {
+            ListTag legacyPalette = section.getList("Palette", Tag.TAG_COMPOUND);
+            if (legacyPalette.isEmpty()) {
+                return;
+            }
+
+            CompoundTag legacyStates = new CompoundTag();
+            legacyStates.put("palette", legacyPalette.copy());
+            if (section.contains("BlockStates", Tag.TAG_LONG_ARRAY)) {
+                long[] data = section.getLongArray("BlockStates");
+                if (data.length != 0) {
+                    legacyStates.putLongArray("data", data);
+                }
+            }
+
+            blockStates = this.decodeBlockStatesWithCompactFallback(legacyStates, x, y, z, true);
+            if (blockStates == null) {
+                return;
+            }
+        } else {
             return;
         }
 
@@ -487,17 +546,6 @@ public class WorldImporter implements IDataImporter {
         byte[] bl = blockLightData.length == 2048 ? blockLightData : null;
         byte[] sl = skyLightData.length == 2048 ? skyLightData : null;
 
-        var blockStatesRes = blockStateCodec.parse(NbtOps.INSTANCE, section.getCompound("block_states"));
-        var blockStates = blockStatesRes.resultOrPartial(Logger::error).orElse(null);
-        if (blockStates == null) {
-            //TODO: if its only partial, it means should try to upgrade the nbt format with datafixerupper probably
-            return;
-        }
-        var biomes = this.defaultBiomeProvider;
-        var optBiomes = section.getCompound("biomes");
-        if (!optBiomes.isEmpty()) {
-            biomes = this.biomeCodec.parse(NbtOps.INSTANCE, optBiomes).result().orElse(this.defaultBiomeProvider);
-        }
         ILightingSupplier lightSupplier = new ArrayLightingSupplier(bl, sl);
         VoxelizedSection csec = WorldConversionFactory.convert(
                 SECTION_CACHE.get().setPosition(x, y, z),
@@ -509,5 +557,108 @@ public class WorldImporter implements IDataImporter {
 
         WorldConversionFactory.mipSection(csec, this.world.getMapper());
         WorldUpdater.insertUpdate(this.world, csec);
+    }
+
+    private PalettedContainer<BlockState> decodeBlockStatesWithCompactFallback(CompoundTag blockStatesTag, int x, int y, int z, boolean legacyPath) {
+        if (!blockStatesTag.contains("data", Tag.TAG_LONG_ARRAY)) {
+            return this.blockStateCodec.parse(NbtOps.INSTANCE, blockStatesTag).resultOrPartial(Logger::error).orElse(null);
+        }
+
+        long[] raw = blockStatesTag.getLongArray("data");
+        if (isKnownCompactStorageLength(raw.length)) {
+            PalettedContainer<BlockState> recovered = this.tryDecodeWithRepackedStorage(blockStatesTag, raw, x, y, z, legacyPath);
+            if (recovered != null) {
+                return recovered;
+            }
+            return this.blockStateCodec.parse(NbtOps.INSTANCE, blockStatesTag).resultOrPartial(Logger::error).orElse(null);
+        }
+
+        var decodeResult = this.blockStateCodec.parse(NbtOps.INSTANCE, blockStatesTag);
+        var direct = decodeResult.result().orElse(null);
+        if (direct != null) {
+            return direct;
+        }
+
+        PalettedContainer<BlockState> recovered = this.tryDecodeWithRepackedStorage(blockStatesTag, raw, x, y, z, legacyPath);
+        if (recovered != null) {
+            return recovered;
+        }
+
+        return decodeResult.resultOrPartial(Logger::error).orElse(null);
+    }
+
+    private PalettedContainer<BlockState> tryDecodeWithRepackedStorage(CompoundTag blockStatesTag, long[] raw, int x, int y, int z, boolean legacyPath) {
+        long[] repacked = tryRepackCompactStorage(raw);
+        if (repacked == null) {
+            return null;
+        }
+
+        CompoundTag repackedTag = blockStatesTag.copy();
+        repackedTag.putLongArray("data", repacked);
+        var recovered = this.blockStateCodec.parse(NbtOps.INSTANCE, repackedTag).result().orElse(null);
+        if (recovered != null) {
+            this.logRecoveredCompactStorage(raw.length, repacked.length, x, y, z, legacyPath);
+        }
+        return recovered;
+    }
+
+    private void logRecoveredCompactStorage(int fromLength, int toLength, int x, int y, int z, boolean legacyPath) {
+        int recoveredCount = this.recoveredCompactStorageCount.incrementAndGet();
+        if (recoveredCount <= RECOVERY_DETAIL_LOG_LIMIT) {
+            Logger.warn("Recovered " + (legacyPath ? "legacy " : "") + "PalettedContainer storage at section (" + x + ", " + y + ", " + z + ") by repacking BlockStates from " + fromLength + " to " + toLength + " longs");
+            return;
+        }
+        if (((recoveredCount - RECOVERY_DETAIL_LOG_LIMIT) % RECOVERY_SUMMARY_LOG_INTERVAL) == 0) {
+            Logger.warn("Recovered " + (legacyPath ? "legacy " : "") + "PalettedContainer storage " + recoveredCount + " times so far; latest section (" + x + ", " + y + ", " + z + "), latest repack " + fromLength + "->" + toLength + " longs");
+        }
+    }
+
+    private static boolean isKnownCompactStorageLength(int length) {
+        return length == COMPACT_BLOCK_STATES_LENGTH_5BIT || length == COMPACT_BLOCK_STATES_LENGTH_6BIT;
+    }
+
+    private static long[] tryRepackCompactStorage(long[] compactData) {
+        if (compactData.length == 0 || (compactData.length % 64) != 0) {
+            return null;
+        }
+
+        int bits = compactData.length / 64;
+        if (bits <= 0 || bits >= 32) {
+            return null;
+        }
+
+        int valuesPerLong = 64 / bits;
+        if (valuesPerLong <= 0) {
+            return null;
+        }
+
+        int paddedLength = (SECTION_STATE_ENTRY_COUNT + valuesPerLong - 1) / valuesPerLong;
+        if (paddedLength == compactData.length) {
+            return null;
+        }
+
+        long mask = (1L << bits) - 1L;
+        long[] paddedData = new long[paddedLength];
+
+        for (int index = 0; index < SECTION_STATE_ENTRY_COUNT; index++) {
+            int bitIndex = index * bits;
+            int srcLongIndex = bitIndex >>> 6;
+            int srcBitOffset = bitIndex & 63;
+
+            long value = compactData[srcLongIndex] >>> srcBitOffset;
+            if ((srcBitOffset + bits) > 64) {
+                if (srcLongIndex + 1 >= compactData.length) {
+                    return null;
+                }
+                value |= compactData[srcLongIndex + 1] << (64 - srcBitOffset);
+            }
+            value &= mask;
+
+            int dstLongIndex = index / valuesPerLong;
+            int dstBitOffset = (index % valuesPerLong) * bits;
+            paddedData[dstLongIndex] |= value << dstBitOffset;
+        }
+
+        return paddedData;
     }
 }
