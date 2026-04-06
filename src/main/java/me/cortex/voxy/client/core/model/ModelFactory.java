@@ -551,7 +551,9 @@ public class ModelFactory {
         if (blockState.getBlock() instanceof LiquidBlock) {
             blockRenderLayer = ItemBlockRenderTypes.getRenderLayer(blockState.getFluidState());
         } else {
-            if (blockState.getBlock() instanceof LeavesBlock) {
+            if (blockState.getBlock() instanceof LeavesBlock && this.isSnowyRemappedBlockId(blockId)) {
+                blockRenderLayer = ModelTextureBakery.getSnowyLeafRenderType();
+            } else if (blockState.getBlock() instanceof LeavesBlock) {
                 blockRenderLayer = RenderType.solid();
             } else {
                 blockRenderLayer = ItemBlockRenderTypes.getChunkRenderType(blockState);
