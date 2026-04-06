@@ -22,14 +22,8 @@
   "voxy.config.general.renderDistance": "渲染距离",
   "voxy.config.general.renderDistance.tooltip": "Voxy的渲染距离（以区块为单位）",
 
-  "voxy.config.general.environmental_fog": "启用环境雾效",
-  "voxy.config.general.environmental_fog.tooltip": "启用或禁用Voxy渲染的环境雾效",
-
-  "voxy.config.general.vanilla_fog": "启用原版雾效",
-  "voxy.config.general.vanilla_fog.tooltip": "启用或禁用原版雾效",
-
-  "voxy.config.general.render_statistics": "启用渲染统计",
-  "voxy.config.general.render_statistics.tooltip": "在F3菜单中启用渲染统计，便于调试",
+  "voxy.config.general.render_fog": "使用世界雾效",
+  "voxy.config.general.render_fog.tooltip": "保留当前世界雾参数，并在 Voxy 的后处理合成阶段应用它",
 
   "voxy.config.general.maxVramUsage": "最大显存占用",
   "voxy.config.general.maxVramUsage.tooltip": "Voxy 允许使用的最大几何数据显存量",

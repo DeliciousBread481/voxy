@@ -1,14 +1,10 @@
 package me.cortex.voxy.client.mixin.minecraft;
 
-import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
-import com.llamalad7.mixinextras.sugar.Local;
 import me.cortex.voxy.client.config.VoxyConfig;
 import me.cortex.voxy.client.core.IGetVoxyRenderSystem;
 import net.minecraft.client.Camera;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.FogRenderer;
 import net.minecraft.client.renderer.FogRenderer.FogMode;
-import net.minecraft.world.level.material.FogType;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -18,6 +14,8 @@ import com.mojang.blaze3d.systems.RenderSystem;
 
 @Mixin(value = FogRenderer.class,remap = true)
 public class MixinFogRenderer {
+    private static final float DISABLED_FOG_DISTANCE = 999999999.0f;
+
     @Inject(
         method = "setupFog(Lnet/minecraft/client/Camera;Lnet/minecraft/client/renderer/FogRenderer$FogMode;FZF)V",
         at = @At("TAIL"),
@@ -38,14 +36,10 @@ public class MixinFogRenderer {
 
         if (RenderSystem.getShaderFogEnd() < 10.0f) return;
 
-        if (camera.getFluidInCamera() != FogType.NONE) {
-            if (!VoxyConfig.CONFIG.renderVanillaFog) {
-                RenderSystem.setShaderFogStart(999999999);
-                RenderSystem.setShaderFogEnd(999999999);
-            }
-        } else {
-            RenderSystem.setShaderFogStart(999999999);
-            RenderSystem.setShaderFogEnd(999999999);
+        // 1.21.1 下 Voxy 的后处理会直接读取当前 fog 参数，只有在用户关闭该选项时才应清空它。
+        if (!VoxyConfig.CONFIG.renderVanillaFog) {
+            RenderSystem.setShaderFogStart(DISABLED_FOG_DISTANCE);
+            RenderSystem.setShaderFogEnd(DISABLED_FOG_DISTANCE);
         }
     }
 }
