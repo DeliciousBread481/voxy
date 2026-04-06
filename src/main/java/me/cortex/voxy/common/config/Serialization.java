@@ -24,6 +24,12 @@ public class Serialization {
     public static final Set<Class<?>> CONFIG_TYPES = new HashSet<>();
     public static Gson GSON;
 
+    @SuppressWarnings("unchecked")
+    private static <T> Class<? extends T> castConfigClass(Class<?> cls) {
+        return (Class<? extends T>) cls;
+    }
+
+    @SuppressWarnings("unchecked")
     private static final class GsonConfigSerialization <T> implements TypeAdapterFactory {
         private final String typeField = "TYPE";
         private final Class<T> clz;
@@ -146,7 +152,7 @@ public class Serialization {
                         count++;
                         String name = (String) nameMethod.invoke(null);
                         serializers.computeIfAbsent(clz, GsonConfigSerialization::new)
-                                .register(name, (Class) original);
+                                .register(name, castConfigClass(original));
                         Logger.info("Registered " + original.getSimpleName() + " as " + name + " for config type " + clz.getSimpleName());
                         break;
                     }

@@ -15,6 +15,7 @@ import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
+@SuppressWarnings("unchecked")
 public class WeakConcurrentCleanableHashMap<K extends LongSupplier, V> {
     //TODO could move to a Cleanable style system possibly?
 

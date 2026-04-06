@@ -28,6 +28,7 @@ public class FullscreenBlit {
         this("voxy:post/fullscreen.vert", fragId, builder);
     }
 
+    @SuppressWarnings("unchecked")
     public <T extends Shader> FullscreenBlit(String vertId, String fragId, Function<Shader.Builder<T>, Shader.Builder<T>> builder) {
         this.shader = builder.apply((Shader.Builder<T>) Shader.make()
                 .add(ShaderType.VERTEX, vertId)

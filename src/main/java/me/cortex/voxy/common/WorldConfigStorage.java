@@ -120,6 +120,7 @@ public class WorldConfigStorage<T> {
         this.load();
     }
 
+    @SuppressWarnings("unchecked")
     private void load() {
         if (Files.exists(this.file)) {
             try (FileReader reader = new FileReader(this.file.toFile())) {

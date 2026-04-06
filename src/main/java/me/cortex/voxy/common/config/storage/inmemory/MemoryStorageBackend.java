@@ -48,6 +48,7 @@ public class MemoryStorageBackend extends StorageBackend {
         }
     }
 
+    @SuppressWarnings("unchecked")
     public MemoryStorageBackend(int slicesBitCount) {
         this.maps = new Long2ObjectMap[1<<slicesBitCount];
         for (int i = 0; i < this.maps.length; i++) {

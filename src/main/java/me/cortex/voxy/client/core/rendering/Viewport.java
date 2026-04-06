@@ -8,6 +8,7 @@ import org.joml.*;
 
 import java.lang.reflect.Field;
 
+@SuppressWarnings("unchecked")
 public abstract class Viewport <A extends Viewport<A>> {
     //public final HiZBuffer2 hiZBuffer = new HiZBuffer2();
     public final HiZBuffer hiZBuffer = new HiZBuffer();

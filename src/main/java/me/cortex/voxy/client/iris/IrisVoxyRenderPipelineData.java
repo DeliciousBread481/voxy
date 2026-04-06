@@ -141,6 +141,7 @@ public class IrisVoxyRenderPipelineData {
     }
 
     public record StructLayout(int size, String layout, LongConsumer updater) {}
+    @SuppressWarnings("unchecked")
     private static StructLayout createUniformLayoutStructAndUpdater(List<UniformWritingHolder> uniforms) {
         if (uniforms.size() == 0) {
             return null;
@@ -299,6 +300,12 @@ public class IrisVoxyRenderPipelineData {
     private record UniformWritingHolder(String name, UniformType type, Long2ObjectFunction<LongConsumer> writingFactory) {
 
     }
+
+    @SuppressWarnings("deprecation")
+    private static UniformType convertStarevalType(Type type) {
+        return Type.convert(type);
+    }
+
     private static List<UniformWritingHolder> createUniformSet(CustomUniforms cu, IrisShaderPatch patch) {
         //This is a fking awful hack... but it works thinks
 
@@ -419,7 +426,7 @@ public class IrisVoxyRenderPipelineData {
             if (!seenUniforms.add(entry.getKey().getName())) {
                 throw new IllegalArgumentException("Already added uniform: " + entry.getKey().getName());
             }
-            uniforms.add(new UniformWritingHolder(entry.getKey().getName(), Type.convert(entry.getKey().getType()),offset->createWriter(offset, cachedReturn, entry.getKey())));
+            uniforms.add(new UniformWritingHolder(entry.getKey().getName(), convertStarevalType(entry.getKey().getType()),offset->createWriter(offset, cachedReturn, entry.getKey())));
         });
 
         if (uniforms.size() != patch.getUniformList().length) {

@@ -17,7 +17,7 @@ import static org.lwjgl.opengl.GL33.glGetQueryObjecti64;
 public class GPUTiming {
     public static GPUTiming INSTANCE = new GPUTiming();
 
-    private final GlTimestampQuerySet<String> timingSet = new GlTimestampQuerySet(String.class);
+    private final GlTimestampQuerySet<String> timingSet = new GlTimestampQuerySet<>(String.class);
 
     private float[] timings = new float[0];
     private String[] lables = new String[0];
@@ -88,6 +88,7 @@ public class GPUTiming {
     public interface TimingDataConsumer <T> {
         void accept(T metadata, long[] timings);
     }
+    @SuppressWarnings("unchecked")
     private static final class GlTimestampQuerySet <T> extends TrackedObject {
 
         private record InflightRequest<T>(int[] queries, T[] meta, TimingDataConsumer<T[]> callback) {

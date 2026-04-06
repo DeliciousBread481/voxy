@@ -22,6 +22,7 @@ public abstract class AbstractSectionRenderer <T extends Viewport<T>, J extends 
         AbstractSectionRenderer<VIEWPORT, GEODATA> create(AbstractRenderPipeline pipeline, ModelStore modelStore, GEODATA geometryData);
     }
 
+    @SuppressWarnings("unchecked")
     public record Factory<VIEWPORT extends Viewport<VIEWPORT>, GEODATA extends IGeometryData>(Class<? extends AbstractSectionRenderer<VIEWPORT, GEODATA>> clz, FactoryConstructor<VIEWPORT, GEODATA> constructor) {
         public AbstractSectionRenderer<VIEWPORT, GEODATA> create(AbstractRenderPipeline pipeline, ModelStore store, IGeometryData geometryData) {
             return this.constructor.create(pipeline, store, (GEODATA) geometryData);

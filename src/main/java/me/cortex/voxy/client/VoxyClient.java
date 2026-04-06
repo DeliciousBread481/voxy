@@ -69,6 +69,7 @@ public class VoxyClient implements ClientModInitializer {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public void onInitializeClient() {
         // DebugScreenEntries.register(ResourceLocation.fromNamespaceAndPath("voxy","debug"), new VoxyDebugScreenEntry());
         ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> {

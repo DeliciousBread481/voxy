@@ -31,6 +31,7 @@ public class VoxyConfigStore {
         }
         gb.registerTypeAdapterFactory(new TypeAdapterFactory() {
             @Override
+            @SuppressWarnings("unchecked")
             public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> typeToken) {
                 if (defaultValueMap.containsKey(typeToken.getRawType())) {
                     var defVal = (T)defaultValueMap.get(typeToken.getRawType());
