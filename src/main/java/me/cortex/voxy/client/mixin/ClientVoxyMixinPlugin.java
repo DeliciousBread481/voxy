@@ -13,9 +13,11 @@ import java.util.Set;
 
 public class ClientVoxyMixinPlugin implements IMixinConfigPlugin {
     private static boolean sodiumLegacy = true;
+    private static boolean nvidiumPresent = false;
 
     @Override
     public void onLoad(String mixinPackage) {
+        nvidiumPresent = this.hasClass("me/cortex/nvidium/RenderPipeline");
         try (InputStream stream = getClass().getClassLoader()
                 .getResourceAsStream("me/jellysquid/mods/sodium/client/render/SodiumWorldRenderer.class")) {
 
@@ -39,7 +41,12 @@ public class ClientVoxyMixinPlugin implements IMixinConfigPlugin {
     }
 
     @Override
-    public boolean shouldApplyMixin(String targetClassName, String mixinClassName) { return true; }
+    public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+        if (mixinClassName.endsWith("nvidium.MixinRenderPipeline")) {
+            return nvidiumPresent;
+        }
+        return true;
+    }
 
     @Override public List<String> getMixins() {
         return List.of(sodiumLegacy ? "sodium.MixinSodiumWorldRendererLegacy" : "sodium.MixinSodiumWorldRenderer");
@@ -56,4 +63,8 @@ public class ClientVoxyMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {}
+
+    private boolean hasClass(String internalName) {
+        return getClass().getClassLoader().getResource(internalName + ".class") != null;
+    }
 }
