@@ -3,6 +3,8 @@ package me.cortex.voxy.common.world.service;
 import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.common.thread.Service;
 import me.cortex.voxy.common.thread.ServiceManager;
+import me.cortex.voxy.common.voxelization.ArrayLightingSupplier;
+import me.cortex.voxy.common.voxelization.ILightingSupplier;
 import me.cortex.voxy.common.voxelization.VoxelizedSection;
 import me.cortex.voxy.common.voxelization.WorldConversionFactory;
 import me.cortex.voxy.common.world.WorldEngine;
@@ -20,8 +22,6 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainer;
 import net.minecraft.world.level.chunk.PalettedContainerRO;
 import net.minecraft.world.level.lighting.LayerLightSectionStorage;
-import org.jetbrains.annotations.NotNull;
-
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -40,7 +40,29 @@ public class VoxelIngestService {
 
     private static final ThreadLocal<VoxelizedSection> SECTION_CACHE = ThreadLocal.withInitial(VoxelizedSection::createEmpty);
     private final Service service;
-    private record IngestSection(int cx, int cy, int cz, WorldEngine world, PalettedContainer<BlockState> states, PalettedContainerRO<Holder<Biome>> biomes, boolean onlyAir, byte[] blockLight, byte[] skyLight){}
+    public static class IngestSection {
+        final int cx;
+        final int cy;
+        final int cz;
+        final WorldEngine world;
+        final PalettedContainer<BlockState> states;
+        final PalettedContainerRO<Holder<Biome>> biomes;
+        final boolean onlyAir;
+        final byte[] blockLight;
+        final byte[] skyLight;
+
+        public IngestSection(int cx, int cy, int cz, WorldEngine world, PalettedContainer<BlockState> states, PalettedContainerRO<Holder<Biome>> biomes, boolean onlyAir, byte[] blockLight, byte[] skyLight) {
+            this.cx = cx;
+            this.cy = cy;
+            this.cz = cz;
+            this.world = world;
+            this.states = states;
+            this.biomes = biomes;
+            this.onlyAir = onlyAir;
+            this.blockLight = blockLight;
+            this.skyLight = skyLight;
+        }
+    }
     private final ConcurrentLinkedDeque<IngestSection> ingestQueue = new ConcurrentLinkedDeque<>();
 
     public VoxelIngestService(ServiceManager pool) {
@@ -56,13 +78,13 @@ public class VoxelIngestService {
         if (task.onlyAir && task.blockLight == null && task.skyLight == null) {
             WorldUpdater.insertUpdate(task.world, vs.zero());
         } else {
+            ILightingSupplier lightSupplier = new ArrayLightingSupplier(task.blockLight, task.skyLight);
             VoxelizedSection csec = WorldConversionFactory.convert(
                     vs,
                     task.world.getMapper(),
                     task.states,
                     task.biomes,
-                    task.blockLight,
-                    task.skyLight
+                    lightSupplier
             );
             WorldConversionFactory.mipSection(csec, task.world.getMapper());
             WorldUpdater.insertUpdate(task.world, csec);

@@ -28,6 +28,8 @@ import me.cortex.voxy.common.thread.ServiceManager;
 import me.cortex.voxy.common.util.MemoryBuffer;
 import me.cortex.voxy.common.util.Pair;
 import me.cortex.voxy.common.util.UnsafeUtil;
+import me.cortex.voxy.common.voxelization.ArrayLightingSupplier;
+import me.cortex.voxy.common.voxelization.ILightingSupplier;
 import me.cortex.voxy.common.voxelization.VoxelizedSection;
 import me.cortex.voxy.common.voxelization.WorldConversionFactory;
 import me.cortex.voxy.common.world.WorldEngine;
@@ -496,13 +498,13 @@ public class WorldImporter implements IDataImporter {
         if (!optBiomes.isEmpty()) {
             biomes = this.biomeCodec.parse(NbtOps.INSTANCE, optBiomes).result().orElse(this.defaultBiomeProvider);
         }
+        ILightingSupplier lightSupplier = new ArrayLightingSupplier(bl, sl);
         VoxelizedSection csec = WorldConversionFactory.convert(
                 SECTION_CACHE.get().setPosition(x, y, z),
                 this.world.getMapper(),
                 blockStates,
                 biomes,
-                bl,
-                sl
+                lightSupplier
         );
 
         WorldConversionFactory.mipSection(csec, this.world.getMapper());
