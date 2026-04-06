@@ -96,13 +96,15 @@ public class IrisVoxyRenderPipelineData {
 
     public static IrisVoxyRenderPipelineData buildPipeline(IrisRenderingPipeline ipipe, IrisShaderPatch patch, CustomUniforms cu, ShaderStorageBufferHolder ssboHolder) {
         var uniforms = createUniformLayoutStructAndUpdater(createUniformSet(cu, patch));
+        var accessor = (IrisRenderingPipelineAccessor) ipipe;
 
         var imageSet = createImageSet(ipipe, patch);
 
         var ssboSet = createSSBOLayouts(patch.getSSBOs(), ssboHolder);
 
-        var opaqueDrawTargets = getDrawBuffers(patch.getOpqaueTargets(), ipipe.getFlippedAfterPrepare(), ((IrisRenderingPipelineAccessor)ipipe).getRenderTargets());
-        var translucentDrawTargets = getDrawBuffers(patch.getTranslucentTargets(), ipipe.getFlippedAfterPrepare(), ((IrisRenderingPipelineAccessor)ipipe).getRenderTargets());
+        var opaqueDrawTargets = getDrawBuffers(patch.getOpqaueTargets(), ipipe.getFlippedAfterPrepare(), accessor.getRenderTargets());
+        var translucentFlips = patch.deferedTranslucentRendering() ? ipipe.getFlippedAfterTranslucent() : ipipe.getFlippedAfterPrepare();
+        var translucentDrawTargets = getDrawBuffers(patch.getTranslucentTargets(), translucentFlips, accessor.getRenderTargets());
 
 
 
@@ -137,7 +139,7 @@ public class IrisVoxyRenderPipelineData {
     }
 
     public boolean shouldDeferTranslucency() {
-        return false;
+        return this.deferTranslucency;
     }
 
     public record StructLayout(int size, String layout, LongConsumer updater) {}
@@ -520,7 +522,11 @@ public class IrisVoxyRenderPipelineData {
             }
         };
 
-        ipipe.addGbufferOrShadowSamplers(samplerBuilder, imageBuilder, ipipe::getFlippedAfterPrepare, false, true, true, false);
+        Supplier<ImmutableSet<Integer>> stageWritesToAlt = () -> ((IrisRenderingPipelineAccessor) ipipe).voxy$isBeforeTranslucent()
+                ? ipipe.getFlippedAfterPrepare()
+                : ipipe.getFlippedAfterTranslucent();
+
+        ipipe.addGbufferOrShadowSamplers(samplerBuilder, imageBuilder, stageWritesToAlt, false, true, true, false);
 
         //samplerSet contains our samplers
         if (samplerSet.size() != samplerNameSet.size()) {

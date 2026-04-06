@@ -179,7 +179,7 @@ public class IrisShaderPatch {
         public float[] renderScale;
         public boolean useViewportDims;
         public boolean skipShaderDepthHackFix;
-        //public boolean deferTranslucentRendering;
+        public boolean deferTranslucentRendering;
         public String checkValid() {
             if (this.blending != null) {
                 int i = 0;
@@ -274,7 +274,7 @@ public class IrisShaderPatch {
     }
 
     public boolean deferedTranslucentRendering() {
-        return false;//this.patchData.deferTranslucentRendering;
+        return this.patchData.deferTranslucentRendering;
     }
 
     public Runnable createBlendSetup() {

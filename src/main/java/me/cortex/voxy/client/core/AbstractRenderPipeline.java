@@ -58,6 +58,7 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
     public final DepthFramebuffer fb = new DepthFramebuffer(GL_DEPTH24_STENCIL8);
 
     protected final boolean deferTranslucency;
+    private boolean deferredTranslucencyPending;
 
     private static final int DEPTH_SAMPLER = glGenSamplers();
     static {
@@ -95,6 +96,7 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
 
     @SuppressWarnings("unchecked")
     public void runPipeline(Viewport<?> viewport, int sourceFrameBuffer, int srcWidth, int srcHeight) {
+        this.deferredTranslucencyPending = false;
         int depthTexture = this.setup(viewport, sourceFrameBuffer, srcWidth, srcHeight);
 
         var rs = ((AbstractSectionRenderer)this.sectionRenderer);
@@ -121,7 +123,31 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
 
         if (!this.deferTranslucency) {
             rs.renderTranslucent(viewport);
+            GPUTiming.INSTANCE.marker();
+
+            this.finish(viewport, sourceFrameBuffer, srcWidth, srcHeight);
+            glBindFramebuffer(GL_FRAMEBUFFER, sourceFrameBuffer);
+        } else {
+            this.deferredTranslucencyPending = true;
+            GPUTiming.INSTANCE.marker();
         }
+    }
+
+    public boolean hasDeferredTranslucencyPending() {
+        return this.deferredTranslucencyPending;
+    }
+
+    @SuppressWarnings("unchecked")
+    public void runDeferredTranslucency(Viewport<?> viewport, int sourceFrameBuffer, int srcWidth, int srcHeight) {
+        if (!this.deferTranslucency || !this.deferredTranslucencyPending || viewport == null) {
+            return;
+        }
+
+        this.deferredTranslucencyPending = false;
+        var rs = (AbstractSectionRenderer) this.sectionRenderer;
+
+        GPUTiming.INSTANCE.marker("RTD");
+        rs.renderTranslucent(viewport);
         GPUTiming.INSTANCE.marker();
 
         this.finish(viewport, sourceFrameBuffer, srcWidth, srcHeight);
