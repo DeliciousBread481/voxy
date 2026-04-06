@@ -254,7 +254,7 @@ public class VoxyRenderSystem {
             throw new IllegalStateException("Cannot use the default framebuffer as cannot source from it");
         }
 
-        //this.autoBalanceSubDivSize();
+        this.autoBalanceSubDivSize();
 
         this.pipeline.preSetup(viewport);
 

@@ -172,6 +172,7 @@ public abstract class VoxyConfigScreenPages {
                         .setName(Component.translatable("voxy.config.general.atmospheric_fog"))
                         .setTooltip(Component.translatable("voxy.config.general.atmospheric_fog.tooltip"))
                         .setControl(TickBoxControl::new)
+                        .setFlags(OptionFlag.REQUIRES_RENDERER_RELOAD)
                         .setBinding((s, v) -> s.atmosphericFog = v, s -> s.atmosphericFog)
                         .build()
                 ).build()

@@ -48,50 +48,16 @@ public class RenderResourceReuse {
     }
 
     static GlBuffer getOrCreateGeometryBuffer() {
-        GlBuffer buffer = null;
-        if (!GEOMETRY_BUFFER_CACHE.isEmpty()) {
-            buffer = GEOMETRY_BUFFER_CACHE.remove(0);
-            //Reuse buffer, todo: probably check the geometry size and try upsize if possible
-        } else {
-            long capacity = getGeometryBufferSize();
-            long driverMemory = -1;
-            if (Capabilities.INSTANCE.canQueryGpuMemory) {
-                driverMemory = Capabilities.INSTANCE.getFreeDedicatedGpuMemory();
+        long capacity = getGeometryBufferSize();
+        while (!GEOMETRY_BUFFER_CACHE.isEmpty()) {
+            GlBuffer cached = GEOMETRY_BUFFER_CACHE.remove(GEOMETRY_BUFFER_CACHE.size() - 1);
+            if (cached.size() == capacity) {
+                return cached;
             }
-
-            glGetError();//Clear any errors
-            if (!(Capabilities.INSTANCE.isNvidia&& ThreadUtils.isWindows&&Capabilities.INSTANCE.sparseBuffer)) {//This hack makes it so it doesnt crash on renderdoc
-                buffer = new GlBuffer(capacity, false);//Only do this if we are not on nvidia
-                //TODO: FIXME: TEST, see if the issue is that we are trying to zero the entire buffer, try only zeroing increments
-                // or dont zero it at all
-            } else {
-                Logger.info("Running on nvidia, using workaround sparse buffer allocation");
-            }
-            int error = glGetError();
-            if (error != GL_NO_ERROR || buffer == null) {
-                if ((buffer == null || error == GL_OUT_OF_MEMORY) && Capabilities.INSTANCE.sparseBuffer) {
-                    if (buffer != null) {
-                        Logger.error("Failed to allocate geometry buffer, attempting workaround with sparse buffers");
-                        buffer.free();
-                    }
-                    buffer = new GlBuffer(capacity, GL_SPARSE_STORAGE_BIT_ARB);
-                    //buffer.zero();
-                    error = glGetError();
-                    if (error != GL_NO_ERROR) {
-                        buffer.free();
-                        throw new IllegalStateException("Unable to allocate geometry buffer using workaround, got gl error " + error);
-                    }
-                } else {
-                    throw new IllegalStateException("Unable to allocate geometry buffer, got gl error " + error);
-                }
-            }
-            String extra = "";
-            if (driverMemory != -1) {
-                extra = ", driver stated " + (driverMemory/(1024*1024)) + "Mb of free memory";
-            }
-            Logger.info("Allocated new geometry buffer: " + buffer.size() + ", isSparse: " + buffer.isSparse() + extra);
+            Logger.info("Discarding cached geometry buffer with outdated capacity " + cached.size() + ", expected " + capacity);
+            cached.free();
         }
-        return buffer;
+        return allocateGeometryBuffer(capacity);
     }
 
     public static void giveBackGeometryBuffer(GlBuffer geometryBuffer) {
@@ -127,5 +93,46 @@ public class RenderResourceReuse {
             geometryCapacity = Math.min(geometryCapacity, (long)VoxyConfig.CONFIG.maxVramUsageMB * 1024L * 1024L);
         }
         return geometryCapacity;
+    }
+
+    private static GlBuffer allocateGeometryBuffer(long capacity) {
+        long driverMemory = -1;
+        if (Capabilities.INSTANCE.canQueryGpuMemory) {
+            driverMemory = Capabilities.INSTANCE.getFreeDedicatedGpuMemory();
+        }
+
+        glGetError();//Clear any errors
+        GlBuffer buffer = null;
+        if (!(Capabilities.INSTANCE.isNvidia&& ThreadUtils.isWindows&&Capabilities.INSTANCE.sparseBuffer)) {//This hack makes it so it doesnt crash on renderdoc
+            buffer = new GlBuffer(capacity, false);//Only do this if we are not on nvidia
+            //TODO: FIXME: TEST, see if the issue is that we are trying to zero the entire buffer, try only zeroing increments
+            // or dont zero it at all
+        } else {
+            Logger.info("Running on nvidia, using workaround sparse buffer allocation");
+        }
+        int error = glGetError();
+        if (error != GL_NO_ERROR || buffer == null) {
+            if ((buffer == null || error == GL_OUT_OF_MEMORY) && Capabilities.INSTANCE.sparseBuffer) {
+                if (buffer != null) {
+                    Logger.error("Failed to allocate geometry buffer, attempting workaround with sparse buffers");
+                    buffer.free();
+                }
+                buffer = new GlBuffer(capacity, GL_SPARSE_STORAGE_BIT_ARB);
+                //buffer.zero();
+                error = glGetError();
+                if (error != GL_NO_ERROR) {
+                    buffer.free();
+                    throw new IllegalStateException("Unable to allocate geometry buffer using workaround, got gl error " + error);
+                }
+            } else {
+                throw new IllegalStateException("Unable to allocate geometry buffer, got gl error " + error);
+            }
+        }
+        String extra = "";
+        if (driverMemory != -1) {
+            extra = ", driver stated " + (driverMemory/(1024*1024)) + "Mb of free memory";
+        }
+        Logger.info("Allocated new geometry buffer: " + buffer.size() + ", isSparse: " + buffer.isSparse() + extra);
+        return buffer;
     }
 }
