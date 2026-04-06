@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
 
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipFile;
@@ -61,6 +62,7 @@ import net.minecraft.world.level.chunk.storage.RegionFileVersion;
 
 public class WorldImporter implements IDataImporter {
     private static final int SECTION_STATE_ENTRY_COUNT = 16 * 16 * 16;
+    private static final Pattern REGION_FILE_NAME_PATTERN = Pattern.compile("^r\\.-?\\d+\\.-?\\d+\\.mca$");
     private static final int COMPACT_BLOCK_STATES_LENGTH_5BIT = 320;
     private static final int COMPACT_BLOCK_STATES_LENGTH_6BIT = 384;
     private static final int RECOVERY_DETAIL_LOG_LIMIT = 8;
@@ -82,7 +84,7 @@ public class WorldImporter implements IDataImporter {
 
     public WorldImporter(WorldEngine worldEngine, Level mcWorld, ServiceManager sm, BooleanSupplier runChecker) {
         this.world = worldEngine;
-        this.service = sm.createService(()->new Pair<>(()->this.jobQueue.poll().run(), ()->{}), 3, "World importer", runChecker);
+        this.service = sm.createService(() -> new Pair<>(this::runQueuedJob, () -> {}), 3, "World importer", runChecker);
 
         var biomeRegistry = mcWorld.registryAccess().registryOrThrow(Registries.BIOME);
         var defaultBiome = biomeRegistry.getHolder(Biomes.PLAINS).orElseThrow();
@@ -172,9 +174,27 @@ public class WorldImporter implements IDataImporter {
             this.service.shutdown();
         }
         //Free all the remaining entries by running the lambda
-        while (!this.jobQueue.isEmpty()) {
-            this.jobQueue.poll().run();
+        Runnable job;
+        while ((job = this.jobQueue.poll()) != null) {
+            job.run();
         }
+    }
+
+    private void runQueuedJob() {
+        Runnable job = this.jobQueue.poll();
+        if (job != null) {
+            job.run();
+        }
+    }
+
+    private boolean shouldAbortImport() {
+        if (!this.isRunning || this.isShutdown.get()) {
+            return true;
+        }
+        if (!this.service.isLive() || !this.world.isLive()) {
+            return true;
+        }
+        return this.world.instanceIn != null && !this.world.instanceIn.isRunning();
     }
 
     private interface IImporterMethod <T> {
@@ -186,9 +206,10 @@ public class WorldImporter implements IDataImporter {
     private ICompletionCallback completionCallback;
     public void importRegionDirectoryAsync(File directory) {
         var files = directory.listFiles((dir, name) -> {
-            var sections = name.split("\\.");
-            if (sections.length != 4 || (!sections[0].equals("r")) || (!sections[3].equals("mca"))) {
-                Logger.error("Unknown file: " + name);
+            if (!isValidRegionFileName(name)) {
+                if (shouldLogUnknownRegionFile(name)) {
+                    Logger.warn("Skipping non-region file: " + name);
+                }
                 return false;
             }
             return true;
@@ -212,9 +233,10 @@ public class WorldImporter implements IDataImporter {
                 }
                 var parts = entry.getName().split("/");
                 var name = parts[parts.length-1];
-                var sections = name.split("\\.");
-                if (sections.length != 4 || (!sections[0].equals("r")) || (!sections[3].equals("mca"))) {
-                    Logger.error("Unknown file: " + name);
+                if (!isValidRegionFileName(name)) {
+                    if (shouldLogUnknownRegionFile(name)) {
+                        Logger.warn("Skipping non-region file in zip: " + name);
+                    }
                     continue;
                 }
                 regions.add(entry);
@@ -256,34 +278,44 @@ public class WorldImporter implements IDataImporter {
         this.worker = new Thread(() -> {
             this.estimatedTotalChunks.addAndGet(regionFiles.length*1024);
             for (var file : regionFiles) {
+                if (this.shouldAbortImport()) {
+                    this.finishWorkerEarly();
+                    return;
+                }
                 this.estimatedTotalChunks.addAndGet(-1024);
                 try {
                     importer.importRegion(file);
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
-                while ((this.totalChunks.get()-this.chunksProcessed.get() > 10_000) && this.isRunning) {
+                while ((this.totalChunks.get()-this.chunksProcessed.get() > 10_000) && !this.shouldAbortImport()) {
                     try {
                         Thread.sleep(1);
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
                     }
                 }
-                if (!this.isRunning) {
-                    this.service.blockTillEmpty();
-                    this.completionCallback.onCompletion(this.totalChunks.get());
-                    this.worker = null;
+                if (this.shouldAbortImport()) {
+                    this.finishWorkerEarly();
                     return;
                 }
             }
+            if (this.shouldAbortImport()) {
+                this.finishWorkerEarly();
+                return;
+            }
             this.service.blockTillEmpty();
-            while (this.chunksProcessed.get() != this.totalChunks.get() && this.isRunning) {
+            while (this.chunksProcessed.get() != this.totalChunks.get() && !this.shouldAbortImport()) {
                 Thread.yield();
                 try {
                     Thread.sleep(10);
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
+            }
+            if (this.shouldAbortImport()) {
+                this.finishWorkerEarly();
+                return;
             }
             if (!this.isShutdown.getAndSet(true)) {
                 this.worker = null;
@@ -293,6 +325,14 @@ public class WorldImporter implements IDataImporter {
             this.completionCallback.onCompletion(this.totalChunks.get());
         });
         this.worker.setName("World importer");
+    }
+
+    private void finishWorkerEarly() {
+        if (this.service.isLive()) {
+            this.service.blockTillEmpty();
+        }
+        this.completionCallback.onCompletion(this.totalChunks.get());
+        this.worker = null;
     }
 
     public boolean isBusy() {
@@ -305,11 +345,13 @@ public class WorldImporter implements IDataImporter {
 
     private void importRegionFile(File file) throws IOException {
         var name = file.getName();
-        var sections = name.split("\\.");
-        if (sections.length != 4 || (!sections[0].equals("r")) || (!sections[3].equals("mca"))) {
-            Logger.error("Unknown file: " + name);
+        if (!isValidRegionFileName(name)) {
+            if (shouldLogUnknownRegionFile(name)) {
+                Logger.warn("Skipping non-region file: " + name);
+            }
             throw new IllegalStateException();
         }
+        var sections = name.split("\\.");
         int rx = 0;
         int rz = 0;
         try {
@@ -344,6 +386,9 @@ public class WorldImporter implements IDataImporter {
             return;
         }
         for (int idx = 0; idx < 1024; idx++) {
+            if (this.shouldAbortImport()) {
+                break;
+            }
             int sectorMeta = Integer.reverseBytes(MemoryUtil.memGetInt(baseAddress + idx * 4L));//Assumes little endian
             if (sectorMeta == 0) {
                 //Empty chunk
@@ -385,8 +430,10 @@ public class WorldImporter implements IDataImporter {
                         Logger.error("Declared size of chunk is negative");
                     } else {
                         var data = new MemoryBuffer(n).cpyFrom(base + 5);
-                        this.jobQueue.add(()-> {
-                            if (!this.isRunning) {
+                        Runnable importTask = () -> {
+                            if (this.shouldAbortImport()) {
+                                this.totalChunks.decrementAndGet();
+                                this.estimatedTotalChunks.decrementAndGet();
                                 data.free();
                                 return;
                             }
@@ -404,10 +451,15 @@ public class WorldImporter implements IDataImporter {
                             } finally {
                                 data.free();
                             }
-                        });
+                        };
+                        this.jobQueue.add(importTask);
                         this.totalChunks.incrementAndGet();
                         this.estimatedTotalChunks.incrementAndGet();
-                        this.service.execute();
+                        if (!this.service.tryExecute() && this.jobQueue.remove(importTask)) {
+                            this.totalChunks.decrementAndGet();
+                            this.estimatedTotalChunks.decrementAndGet();
+                            data.free();
+                        }
                     }
                 }
             }
@@ -450,6 +502,11 @@ public class WorldImporter implements IDataImporter {
     }
 
     private void importChunkNBT(CompoundTag chunk, int regionX, int regionZ) {
+        if (this.shouldAbortImport()) {
+            this.totalChunks.decrementAndGet();
+            this.estimatedTotalChunks.decrementAndGet();
+            return;
+        }
         CompoundTag chunkData = this.resolveChunkData(chunk);
         ListTag sections = this.getSectionList(chunkData);
         if (sections == null || sections.isEmpty()) {
@@ -457,6 +514,7 @@ public class WorldImporter implements IDataImporter {
             return;
         }
 
+        // Keep the previous status gate for known statuses, but allow older/unknown layouts through.
         if (chunkData.contains("Status", Tag.TAG_STRING)) {
             var status = ChunkStatus.byName(chunkData.getString("Status"));
             if (status != null && status != ChunkStatus.FULL && status != ChunkStatus.EMPTY) {
@@ -510,6 +568,7 @@ public class WorldImporter implements IDataImporter {
         if (!blockStatesTag.isEmpty()) {
             blockStates = this.decodeBlockStatesWithCompactFallback(blockStatesTag, x, y, z, false);
             if (blockStates == null) {
+                //TODO: if its only partial, it means should try to upgrade the nbt format with datafixerupper probably
                 return;
             }
 
@@ -539,7 +598,6 @@ public class WorldImporter implements IDataImporter {
         } else {
             return;
         }
-
         byte[] blockLightData = section.getByteArray("BlockLight");
         byte[] skyLightData = section.getByteArray("SkyLight");
 
@@ -660,5 +718,13 @@ public class WorldImporter implements IDataImporter {
         }
 
         return paddedData;
+    }
+
+    private static boolean isValidRegionFileName(String name) {
+        return REGION_FILE_NAME_PATTERN.matcher(name).matches();
+    }
+
+    private static boolean shouldLogUnknownRegionFile(String name) {
+        return !name.endsWith(".backup");
     }
 }

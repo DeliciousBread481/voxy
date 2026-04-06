@@ -22,6 +22,7 @@ import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainer;
 import net.minecraft.world.level.chunk.PalettedContainerRO;
 import net.minecraft.world.level.lighting.LayerLightSectionStorage;
+
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -93,6 +94,14 @@ public class VoxelIngestService {
         releaseLightData(task.skyLight);
     }
 
+    private void discardQueuedIngestTasks() {
+        IngestSection task;
+        while ((task = this.ingestQueue.poll()) != null) {
+            releaseLightData(task.blockLight);
+            releaseLightData(task.skyLight);
+        }
+    }
+
     private static IngestSection snapshotSection(int cx, int cy, int cz, WorldEngine world, LevelChunkSection section, byte[] blockLight, byte[] skyLight) {
         boolean onlyAir = section.hasOnlyAir();
         PalettedContainer<BlockState> states = onlyAir ? null : section.getStates().copy();
@@ -146,10 +155,9 @@ public class VoxelIngestService {
                 added = true;
             }
             if (added) {
-                try {
-                    this.service.execute();
-                } catch (Exception e) {
-                    Logger.error("Executing had an error: assume shutting down, aborting", e);
+                if (!this.service.tryExecute()) {
+                    this.discardQueuedIngestTasks();
+                    return false;
                 }
             }
         }
@@ -179,10 +187,9 @@ public class VoxelIngestService {
             added = true;
         }
         if (added) {
-            try {
-                this.service.execute();
-            } catch (Exception e) {
-                Logger.error("Executing had an error: assume shutting down, aborting", e);
+            if (!this.service.tryExecute()) {
+                this.discardQueuedIngestTasks();
+                return false;
             }
         }
         return true;
@@ -213,14 +220,21 @@ public class VoxelIngestService {
     }
 
     private boolean rawIngest0(WorldEngine engine, LevelChunkSection section, int x, int y, int z, byte[] bl, byte[] sl) {
-        this.ingestQueue.add(snapshotSection(x, y, z, engine, section, bl, sl));
-        try {
-            this.service.execute();
-            return true;
-        } catch (Exception e) {
-            Logger.error("Executing had an error: assume shutting down, aborting", e);
+        if (!this.service.isLive()) {
+            releaseLightData(bl);
+            releaseLightData(sl);
             return false;
         }
+        IngestSection task = snapshotSection(x, y, z, engine, section, bl, sl);
+        this.ingestQueue.add(task);
+        if (!this.service.tryExecute()) {
+            if (this.ingestQueue.remove(task)) {
+                releaseLightData(task.blockLight);
+                releaseLightData(task.skyLight);
+            }
+            return false;
+        }
+        return true;
     }
 
     public static boolean rawIngest(WorldIdentifier id, LevelChunkSection section, int x, int y, int z, DataLayer bl, DataLayer sl) {
