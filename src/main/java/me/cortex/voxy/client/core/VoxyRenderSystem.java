@@ -296,33 +296,7 @@ public class VoxyRenderSystem {
 
         GPUTiming.INSTANCE.tick();
 
-        glBindFramebuffer(GlConst.GL_FRAMEBUFFER, oldFB);
-        glViewport(dims[0], dims[1], dims[2], dims[3]);
-
-        {//Reset state manager stuffs
-            glUseProgram(0);
-            glEnable(GL_DEPTH_TEST);
-            glDisable(GL_STENCIL_TEST);
-
-            GlStateManager._glBindVertexArray(0);//Clear binding
-
-            GlStateManager._activeTexture(GlConst.GL_TEXTURE1);
-            for (int i = 0; i < 12; i++) {
-                GlStateManager._activeTexture(GlConst.GL_TEXTURE0+i);
-                GlStateManager._bindTexture(0);
-                glBindSampler(i, 0);
-            }
-
-            IrisUtil.clearIrisSamplers();//Thanks iris (sigh)
-
-            //TODO: should/needto actually restore all of these, not just clear them
-            //Clear all the bindings
-            for (int i = 0; i < oldBufferBindings.length; i++) {
-                glBindBufferBase(GL_SHADER_STORAGE_BUFFER, i, oldBufferBindings[i]);
-            }
-
-            //((SodiumShader) Iris.getPipelineManager().getPipelineNullable().getSodiumPrograms().getProgram(DefaultTerrainRenderPasses.CUTOUT).getInterface()).setupState(DefaultTerrainRenderPasses.CUTOUT, fogParameters);
-        }
+        this.restoreRenderState(oldFB, dims, oldBufferBindings);
 
         TimingStatistics.all.stop();
 
@@ -353,6 +327,55 @@ public class VoxyRenderSystem {
         this.postProcessing.renderPost(viewport, matrices.projection(), boundFB);
         TimingStatistics.F.stop();
          */
+    }
+
+    public void renderDeferredTranslucent() {
+        var viewport = this.getViewport();
+        if (viewport == null || !this.pipeline.hasDeferredTranslucencyPending()) {
+            return;
+        }
+
+        int[] oldBufferBindings = new int[10];
+        for (int i = 0; i < oldBufferBindings.length; i++) {
+            oldBufferBindings[i] = glGetIntegeri(GL_SHADER_STORAGE_BUFFER_BINDING, i);
+        }
+
+        int oldFB = GL11.glGetInteger(GL_DRAW_FRAMEBUFFER_BINDING);
+        int[] dims = new int[4];
+        glGetIntegerv(GL_VIEWPORT, dims);
+
+        glViewport(0, 0, viewport.width, viewport.height);
+
+        if (oldFB == 0) {
+            throw new IllegalStateException("Cannot use the default framebuffer as cannot source from it");
+        }
+
+        this.pipeline.runDeferredTranslucency(viewport, oldFB, dims[2], dims[3]);
+        this.restoreRenderState(oldFB, dims, oldBufferBindings);
+    }
+
+    private void restoreRenderState(int oldFB, int[] dims, int[] oldBufferBindings) {
+        glBindFramebuffer(GlConst.GL_FRAMEBUFFER, oldFB);
+        glViewport(dims[0], dims[1], dims[2], dims[3]);
+
+        glUseProgram(0);
+        glEnable(GL_DEPTH_TEST);
+        glDisable(GL_STENCIL_TEST);
+
+        GlStateManager._glBindVertexArray(0);//Clear binding
+
+        GlStateManager._activeTexture(GlConst.GL_TEXTURE1);
+        for (int i = 0; i < 12; i++) {
+            GlStateManager._activeTexture(GlConst.GL_TEXTURE0+i);
+            GlStateManager._bindTexture(0);
+            glBindSampler(i, 0);
+        }
+
+        IrisUtil.clearIrisSamplers();//Thanks iris (sigh)
+
+        for (int i = 0; i < oldBufferBindings.length; i++) {
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, i, oldBufferBindings[i]);
+        }
     }
 
 

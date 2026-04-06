@@ -51,6 +51,14 @@ public class MixinIrisRenderingPipeline implements IGetVoxyPatchData, IGetIrisVo
         }
     }
 
+    @Inject(method = "beginTranslucents", at = @At("TAIL"))
+    private void voxy$renderDeferredTranslucency(CallbackInfo ci) {
+        var renderer = ((IGetVoxyRenderSystem) Minecraft.getInstance().levelRenderer).getVoxyRenderSystem();
+        if (renderer != null) {
+            renderer.renderDeferredTranslucent();
+        }
+    }
+
     @Override
     public IrisShaderPatch voxy$getPatchData() {
         return this.patchData;
