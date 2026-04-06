@@ -45,8 +45,18 @@ public class ModelTextureBakery {
     private final SoftwareRasterizer rasterizer = new SoftwareRasterizer();
     private final @Nullable MethodHandle isSnowyBlockHandle = resolveIsSnowyBlockHandle();
     private final AtomicBoolean snowyBridgeFailureLogged = new AtomicBoolean(false);
+    private volatile boolean snowyBlock;
 
     public ModelTextureBakery() {
+    }
+
+    // 供兼容桥接通过反射切换当前烘焙是否处于 snowy 变体
+    public void setSnowyBlock(boolean snowyBlock) {
+        this.snowyBlock = snowyBlock;
+    }
+
+    public boolean isSnowyBlock() {
+        return this.snowyBlock;
     }
 
     private @Nullable MethodHandle resolveIsSnowyBlockHandle() {
@@ -116,6 +126,10 @@ public class ModelTextureBakery {
         int meta = hasDiscard?1:0;
         meta |= true?2:0;
         return meta;
+    }
+
+    public static RenderType getSnowyLeafRenderType() {
+        return RenderType.cutoutMipped();
     }
 
     private void bakeBlockModel(BlockState state, RenderType layer) {
@@ -253,12 +267,16 @@ public class ModelTextureBakery {
 
 
         boolean isBlock = true;
+        boolean snowyBakingActive = this.isSnowyBakingActive();
         RenderType layer;
         if (state.getBlock() instanceof LiquidBlock) {
             layer = ItemBlockRenderTypes.getRenderLayer(state.getFluidState());
             isBlock = false;
         } else {
-            if (state.getBlock() instanceof LeavesBlock && !this.isSnowyBakingActive()) {
+            if (state.getBlock() instanceof LeavesBlock && snowyBakingActive) {
+                // 与 Ecliptic 近景 snowyLeaves 的渲染层保持一致
+                layer = getSnowyLeafRenderType();
+            } else if (state.getBlock() instanceof LeavesBlock) {
                 layer = RenderType.solid();
             } else {
                 layer = ItemBlockRenderTypes.getChunkRenderType(state);
