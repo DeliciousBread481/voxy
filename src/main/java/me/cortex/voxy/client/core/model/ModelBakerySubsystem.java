@@ -18,6 +18,9 @@ public class ModelBakerySubsystem {
     private final ModelStore storage = new ModelStore();
     public final ModelFactory factory;
     private final Mapper mapper;
+    private static final long IDLE_PARK_NANOS = 10_000_000L;
+    private final AtomicInteger blockIdCount = new AtomicInteger();
+    private final ConcurrentLinkedDeque<Integer> blockIdQueue = new ConcurrentLinkedDeque<>();// 串行化 addEntry 调用，避免流体依赖顺序被并发打乱
 
     private final Thread processingThread;
     private volatile boolean isRunning = true;
@@ -27,12 +30,19 @@ public class ModelBakerySubsystem {
         this.factory = new ModelFactory(mapper, this.storage);
         this.processingThread = new Thread(()->{//TODO replace this with something good/integrate it into the async processor so that we just have less threads overall
             while (this.isRunning) {
+                Integer blockId = this.blockIdQueue.poll();
+                int drained = 0;
+                while (blockId != null) {
+                    this.factory.addEntry(blockId);
+                    drained++;
+                    blockId = this.blockIdQueue.poll();
+                }
+                if (drained != 0) {
+                    this.blockIdCount.addAndGet(-drained);
+                }
                 this.factory.processAllThings();
-                try {
-                    //TODO: replace with LockSupport.park();
-                    Thread.sleep(10);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
+                if (this.blockIdQueue.isEmpty()) {
+                    LockSupport.parkNanos(this, IDLE_PARK_NANOS);
                 }
             }
         }, "Model factory processor");
@@ -55,6 +65,7 @@ public class ModelBakerySubsystem {
 
     public void shutdown() {
         this.isRunning = false;
+        LockSupport.unpark(this.processingThread);
         try {
             this.processingThread.join();
         } catch (InterruptedException e) {
@@ -67,7 +78,6 @@ public class ModelBakerySubsystem {
 
     //This is on this side only and done like this as only worker threads call this code
     private final ReentrantLock seenIdsLock = new ReentrantLock();
-    private final ReentrantLock enqueueLock = new ReentrantLock();
     private final IntOpenHashSet seenIds = new IntOpenHashSet(6000);//TODO: move to a lock free concurrent hashmap
     public void requestBlockBake(int blockId) {
         if (this.mapper.getBlockStateCount() < blockId) {
@@ -80,17 +90,18 @@ public class ModelBakerySubsystem {
             return;
         }
         this.seenIdsLock.unlock();
-        this.enqueueLock.lock();
-        this.factory.addEntry(blockId);
-        this.enqueueLock.unlock();
+        this.blockIdQueue.add(blockId);
+        this.blockIdCount.incrementAndGet();
+        LockSupport.unpark(this.processingThread);
     }
 
     public void addBiome(Mapper.BiomeEntry biomeEntry) {
         this.factory.addBiome(biomeEntry);
+        LockSupport.unpark(this.processingThread);
     }
 
     public void addDebugData(List<String> debug) {
-        debug.add(String.format("IF/MC: %03d, %04d", this.factory.getInflightCount(),  this.factory.getBakedCount()));//Model bake queue/in flight/model baked count
+        debug.add(String.format("MQ/IF/MC: %04d, %03d, %04d", this.blockIdCount.get(), this.factory.getInflightCount(), this.factory.getBakedCount()));//Model bake queue/in flight/model baked count
     }
 
     public ModelStore getStore() {
@@ -98,10 +109,10 @@ public class ModelBakerySubsystem {
     }
 
     public boolean areQueuesEmpty() {
-        return this.factory.getInflightCount() == 0;
+        return this.blockIdCount.get() == 0 && this.factory.getInflightCount() == 0;
     }
 
     public int getProcessingCount() {
-        return this.factory.getInflightCount();
+        return this.blockIdCount.get() + this.factory.getInflightCount();
     }
 }
